@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"al.codeAnalyzers": [
+			"${CodeCop}",
+			"${UICop}"
+		],
+		"al.enableCodeAnalysis": true,
+		"al.rulesetPath": "Cop.ruleset.json",
+		"al.enableCodeActions": true,
+	}
+}

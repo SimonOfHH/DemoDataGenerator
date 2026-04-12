@@ -1,0 +1,66 @@
+# Created by https://www.gitignore.io/api/al,windows
+# Edit at https://www.gitignore.io/?templates=al,windows
+
+# The tools folder
+.tools
+.snapshots
+
+#Root Folder
+.vscode/**
+!.vscode/settings.json
+#Symbols folder
+.alpackages/
+.alcache/
+.altemplates/
+.altestrunner/
+
+### AL ###
+#XLIFF file
+*.g.xlf
+#Template for AL projects for Dynamics 365 BC
+app/.vscode/**
+!app/.vscode/settings.json
+#Symbols folder
+app/.alpackages/
+app/.alcache/
+app/.altemplates/
+app/.altestrunner/
+
+test/.vscode/**
+!test/.vscode/settings.json
+#Symbols folder
+test/.alpackages/
+test/.alcache/
+test/.altemplates/
+test/.altestrunner/
+
+# End of https://www.gitignore.io/api/al,windows
+
+### Windows ###
+# Windows thumbnail cache files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+
+# Dump file
+*.stackdump
+
+# Folder config file
+[Dd]esktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+# End of https://www.gitignore.io/api/al,windows
+*.app
+.github/*
