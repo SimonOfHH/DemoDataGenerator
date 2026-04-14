@@ -190,15 +190,18 @@ codeunit 70111 "CodeGen Procedure"
         Lines: List of [Text];
         Line: Text;
         Result: TextBuilder;
-        LF: Char;
+        LF, CR : Char;
         NewLine: Text;
     begin
         LF := 10;
+        CR := 13;
         NewLine := Format(LF);
         Lines := BodyText.Split(NewLine);
-        foreach Line in Lines do
+        foreach Line in Lines do begin
+            Line := Line.TrimEnd(CR); // Remove any carriage return characters
             if Line <> '' then
                 Result.AppendLine(Prefix + Line);
+        end;
         exit(Result.ToText());
     end;
 }

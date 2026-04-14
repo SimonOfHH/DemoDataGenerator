@@ -112,7 +112,6 @@ codeunit 70119 "CodeGen Reference Value"
         Result.AppendLine(Indent + 'begin');
         Result.AppendLine(Indent + Indent + StrSubstNo(ReturnValuePlaceholderLbl, this.ALFormatter.FormatValue(this.GetAsFldRef(this.RefTableId, this.RefFieldId, this.RefValue))));
         Result.AppendLine(Indent + 'end;');
-        Result.AppendLine('');
         exit(Result.ToText());
     end;
 }

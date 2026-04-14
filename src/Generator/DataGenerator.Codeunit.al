@@ -52,16 +52,18 @@ codeunit 70121 "Data Generator"
         ModuleDefinition: Record "Module Definition";
         DataCU: Codeunit "CodeGen Codeunit";
         OnRunProc: Codeunit "CodeGen Procedure";
-        HelperLocalVar: Codeunit "CodeGen Variable";
         ComplexArgument: Codeunit "CodeGen Argument";
+        VariableHelper: Codeunit "CodeGen Variable Helper";
         RecRef: RecordRef;
-        HelperVarName: Text;
+        HelperTableName, HelperVarName : Text;
         InsertProcName: Text;
+        HelperNames: List of [Text];
         // Dynamic field tracking: ProcName is the unique key
         ComplexArguments: List of [Codeunit "CodeGen Argument"];
     begin
         ModuleDefinition.Get(TableSel."Module Code");
-        HelperVarName := this.ALFormatter.ToPascalCase(TableSel."Helper Codeunit Name");
+        HelperNames := this.GetHelperCodeunitNames(ModuleDefinition, TableSel);
+
         InsertProcName := this.IdentifierHelper.GetInsertProcedureName(TableSel."Table Name");
 
         DataCU.Initialize(ObjectId, TableSel."Data Codeunit Name");
@@ -79,9 +81,11 @@ codeunit 70121 "Data Generator"
         OnRunProc.Init('OnRun');
         OnRunProc.SetTrigger(true);
 
-        Clear(HelperLocalVar);
-        HelperLocalVar.Init(HelperVarName, 'Codeunit', 0, TableSel."Helper Codeunit Name", '');
-        OnRunProc.AddLocalVariable(HelperLocalVar);
+        foreach HelperTableName in HelperNames do begin
+            HelperVarName := this.ALFormatter.ToPascalCase(HelperTableName);
+            OnRunProc.AddLocalVariable(VariableHelper.GetVariable(HelperVarName, 'Codeunit', 0, HelperTableName, ''));
+        end;
+        HelperVarName := this.ALFormatter.ToPascalCase(TableSel."Helper Codeunit Name");
 
         // Read live data and generate Insert calls
         RecRef.Open(TableSel."Table ID");
@@ -173,14 +177,14 @@ codeunit 70121 "Data Generator"
         FldRef: FieldRef;
         var ComplexArguments: List of [Codeunit "CodeGen Argument"]; HelperCUName: Text): Text
     var
+        TableSelection: Record "Table Selection";
         Argument: Codeunit "CodeGen Argument";
         ReferenceValue: Codeunit "CodeGen Reference Value";
-        RawValue: Text;
-        ProcName: Text;
-        VarName: Text;
-        RetType: Text;
+        RawValue, ProcName, VarName, RetType : Text;
+        IsReferencedField: Boolean;
     begin
         FieldConfig.CalcFields("Is Referenced Field");
+        IsReferencedField := FieldConfig."Is Referenced Field" and (FieldConfig.Behavior <> FieldConfig.Behavior::"Reference Value");
         if FieldConfig."Is Referenced Field" then begin
             FieldConfig.Behavior := FieldConfig.Behavior::"Reference Value";
             FieldConfig."Reference Table ID" := FieldConfig."Table ID";
@@ -224,13 +228,56 @@ codeunit 70121 "Data Generator"
                 end;
             FieldConfig.Behavior::"Reference Value":
                 begin
-                    RawValue := ReferenceValue.GetAsArgParameter(HelperCUName, FieldConfig."Reference Table ID", FieldConfig."Reference Field ID", FldRef.Value);
+                    // Get Helper Codeunit name from reference coordinates
+                    if TableSelection.Get(FieldConfig."Module Code", FieldConfig."Reference Table ID") then
+                        HelperCUName := this.ALFormatter.ToPascalCase(TableSelection."Helper Codeunit Name");
+                    if IsReferencedField then
+                        RawValue := ReferenceValue.GetAsArgParameter(HelperCUName, FieldConfig."Reference Table ID", FieldConfig."Reference Field ID", this.GetEffectiveReferenceValue(FieldConfig, FldRef.Value))
+                    else
+                        RawValue := ReferenceValue.GetAsArgParameter(HelperCUName, FieldConfig."Reference Table ID", FieldConfig."Reference Field ID", FldRef.Value);
                     exit(RawValue);
                 end;
             else
                 // Exclude — should not reach here since filtered out
                 exit('''''');
         end;
+    end;
+
+    /// <summary>
+    /// Returns CurrentValue if a reference value getter exists for it, otherwise falls back
+    /// to the first available value from the referencing table. This handles the case where
+    /// the referenced table has more records than the referencing table actually references.
+    /// </summary>
+    local procedure GetEffectiveReferenceValue(FieldConfig: Record "Field Configuration"; CurrentValue: Variant): Variant
+    var
+        RefFieldConfig: Record "Field Configuration";
+        RecRef: RecordRef;
+        FldRef: FieldRef;
+        FirstValue: Variant;
+        Found: Boolean;
+    begin
+        RefFieldConfig.SetRange("Module Code", FieldConfig."Module Code");
+        RefFieldConfig.SetRange("Reference Table ID", FieldConfig."Reference Table ID");
+        RefFieldConfig.SetRange("Reference Field ID", FieldConfig."Reference Field ID");
+        RefFieldConfig.SetRange(Behavior, RefFieldConfig.Behavior::"Reference Value");
+        if not RefFieldConfig.FindFirst() then
+            exit(CurrentValue);
+
+        RecRef.Open(RefFieldConfig."Table ID");
+        if not RecRef.FindSet() then
+            exit(CurrentValue);
+
+        FldRef := RecRef.Field(RefFieldConfig."Field No.");
+        FirstValue := FldRef.Value;
+        repeat
+            FldRef := RecRef.Field(RefFieldConfig."Field No.");
+            if Format(FldRef.Value) = Format(CurrentValue) then
+                Found := true;
+        until (RecRef.Next() = 0) or Found;
+
+        if Found then
+            exit(CurrentValue);
+        exit(FirstValue);
     end;
 
     local procedure BuildReturnType(DataType: Text; DataLength: Integer): Text
@@ -249,5 +296,24 @@ codeunit 70121 "Data Generator"
         FieldConfig.SetFilter(Behavior, '<>%1', FieldConfig.Behavior::Exclude);
         FieldConfig.SetRange("Data Type", 'DateFormula');
         exit(not FieldConfig.IsEmpty());
+    end;
+
+    local procedure GetHelperCodeunitNames(ModuleDefinition: Record "Module Definition"; CurrTableSelection: Record "Table Selection"): List of [Text]
+    var
+        FieldConfig: Record "Field Configuration";
+        TableSelection: Record "Table Selection";
+        HelperCUNameList: List of [Text];
+    begin
+        HelperCUNameList.Add(CurrTableSelection."Helper Codeunit Name"); // Include self
+        FieldConfig.SetRange("Module Code", ModuleDefinition.Code);
+        FieldConfig.SetFilter("Reference Table ID", '<>%1', CurrTableSelection."Table ID");
+        FieldConfig.SetRange(Behavior, FieldConfig.Behavior::"Reference Value");
+        if FieldConfig.FindSet() then
+            repeat
+                if TableSelection.Get(FieldConfig."Module Code", FieldConfig."Reference Table ID") then
+                    if not HelperCUNameList.Contains(TableSelection."Helper Codeunit Name") then
+                        HelperCUNameList.Add(TableSelection."Helper Codeunit Name");
+            until FieldConfig.Next() = 0;
+        exit(HelperCUNameList);
     end;
 }

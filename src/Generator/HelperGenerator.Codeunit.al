@@ -126,29 +126,35 @@ codeunit 70120 "Helper Generator"
     end;
 
     /// <summary>
-    /// Collects all reference values across tables in a helper group by iterating
-    /// tables with Reference Value fields and delegating to the per-table overload.
+    /// Collects all reference values that belong to a helper group by finding
+    /// fields across the module whose referenced table belongs to this group,
+    /// then delegating to the per-table overload to read actual field values.
     /// </summary>
     local procedure GetFieldReferenceValues(ModuleDefinition: Record "Module Definition"; GroupName: Text): List of [Codeunit "CodeGen Reference Value"]
     var
-        TableSelection: Record "Table Selection";
+        ReferencedTable: Record "Table Selection";
+        ReferencingTable: Record "Table Selection";
         FieldConfig: Record "Field Configuration";
         ReferenceValues: List of [Codeunit "CodeGen Reference Value"];
     begin
-        TableSelection.SetRange("Module Code", ModuleDefinition.Code);
-        TableSelection.SetRange("Helper Group", GroupName);
-        if not TableSelection.FindSet() then
+        // Find all tables in this helper group — these are potential reference targets
+        ReferencedTable.SetRange("Module Code", ModuleDefinition.Code);
+        ReferencedTable.SetRange("Helper Group", GroupName);
+        if not ReferencedTable.FindSet() then
             exit;
         repeat
+            // Find all fields across the module that reference this table
             FieldConfig.SetRange("Module Code", ModuleDefinition.Code);
-            FieldConfig.SetRange("Table ID", TableSelection."Table ID");
+            FieldConfig.SetRange("Reference Table ID", ReferencedTable."Table ID");
             FieldConfig.SetRange("Behavior", FieldConfig.Behavior::"Reference Value");
             if not FieldConfig.FindSet() then
                 continue;
             repeat
-                ReferenceValues.AddRange(GetFieldReferenceValues(TableSelection, FieldConfig));
+                // Read actual values from the referencing table to build getter procedures
+                if ReferencingTable.Get(ModuleDefinition.Code, FieldConfig."Table ID") then
+                    ReferenceValues.AddRange(GetFieldReferenceValues(ReferencingTable, FieldConfig));
             until FieldConfig.Next() = 0;
-        until TableSelection.Next() = 0;
+        until ReferencedTable.Next() = 0;
         exit(ReferenceValues);
     end;
 

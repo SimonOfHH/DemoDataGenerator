@@ -105,7 +105,8 @@ codeunit 70112 "CodeGen Codeunit"
         RefValue: Codeunit "CodeGen Reference Value";
     begin
         foreach RefValue in RefValues do
-            this.AddReferenceValue(RefValue);
+            if not this.ContainsReferenceValue(RefValue.TableId(), RefValue.FieldId(), RefValue.Value()) then
+                this.AddReferenceValue(RefValue);
     end;
 
     procedure AddReferenceValue(NewRefTableId: Integer; NewRefFieldId: Integer; NewRefValue: Variant)
@@ -113,12 +114,24 @@ codeunit 70112 "CodeGen Codeunit"
         RefValue: Codeunit "CodeGen Reference Value";
     begin
         RefValue.Init(NewRefTableId, NewRefFieldId, NewRefValue);
-        this.AddReferenceValue(RefValue);
+        if not this.ContainsReferenceValue(NewRefTableId, NewRefFieldId, NewRefValue) then
+            this.AddReferenceValue(RefValue);
     end;
 
     procedure AddReferenceValue(RefValue: Codeunit "CodeGen Reference Value")
     begin
-        this.ReferenceValues.Add(RefValue);
+        if not this.ContainsReferenceValue(RefValue.TableId(), RefValue.FieldId(), RefValue.Value()) then
+            this.ReferenceValues.Add(RefValue);
+    end;
+
+    procedure ContainsReferenceValue(TableId: Integer; FieldId: Integer; FldValue: Variant): Boolean
+    var
+        RefValue: Codeunit "CodeGen Reference Value";
+    begin
+        foreach RefValue in this.ReferenceValues do
+            if (RefValue.TableId() = TableId) and (RefValue.FieldId() = FieldId) and (Format(RefValue.Value()) = Format(FldValue)) then // TODO: Check if Format is sufficient for value comparison or if we need a more robust approach that takes data types into account
+                exit(true);
+        exit(false);
     end;
 
     procedure ToIdentifierString(): Text

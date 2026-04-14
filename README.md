@@ -54,7 +54,7 @@ Each field can be configured with one of the following behaviors:
 | **Label Field** | Creates a global `Label` constant and uses the label variable in the Insert call |
 | **Dynamic Field** | Generates a placeholder procedure that returns a default value — intended to be replaced by the developer |
 | **Procedure with Token-Label** | Generates an accessor procedure backed by a `Label` variable — useful for values that should be translatable |
-| **Reference Value** | Generates a helper procedure that returns a cross-table reference value by table/field ID |
+| **Reference Value** | Generates a helper procedure that returns a cross-table reference value by table/field ID. **Note:** When the referenced table contains more records than are actually referenced, the generator falls back to the first available reference value. Review the generated getter calls to ensure they map to the correct values for your scenario. |
 | **Exclude** | Skips the field entirely (default for FlowFields, Blobs, MediaSets, system fields, obsoleted fields) |
 
 Additionally, Text and Code fields can be marked as **Locked Label**, which adds `Locked = true` to the generated Label declaration — preventing the value from being translated.
