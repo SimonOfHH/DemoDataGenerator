@@ -24,6 +24,7 @@ For each module you configure, the generator produces a complete AL extension co
 | **Enum Extension** | Extends `"Contoso Demo Data Module"` enum (Enum 5160) |
 | **Helper Codeunits** | One per helper group — contain `Insert*` procedures with the `Get / Validate / Insert\|Modify` pattern |
 | **Data Codeunits** | One per table — contain `OnRun` triggers that call helper Insert procedures with literal values from your live data |
+| **Copilot Review Prompt** | `.github/prompts/review-generated-code.prompt.md` — a GitHub Copilot agent prompt bundled in the ZIP that guides you through reviewing and polishing the auto-generated code |
 
 The generated code follows the exact same patterns used in Microsoft's own Contoso modules (`ContosoBank`, `ContosoCustomerVendor`, etc.).
 
@@ -93,6 +94,7 @@ DateFormula fields are automatically detected and wrapped in an `EvaluateDateFor
 - Post-generation validation (object count vs. ID range capacity)
 - Preview ID allocation before generating
 - Downloads the complete extension as a structured ZIP file
+- Bundles a **Copilot review prompt** (`.github/prompts/review-generated-code.prompt.md`) in the ZIP — open the extracted folder in VS Code and invoke the prompt via GitHub Copilot Chat to get guided, context-aware feedback on labels, naming, Contoso helper usage, sensitive data, and more
 
 ## Requirements
 
