@@ -84,6 +84,16 @@ DateFormula fields are automatically detected and wrapped in an `EvaluateDateFor
 - Import previously exported modules into other environments
 - Automatic cleanup on import: removes tables/fields that don't exist in the target environment
 
+### Sample Module
+
+A ready-made sample module definition is included in the [`.sample/`](.sample/) folder:
+
+| File | Description |
+|---|---|
+| [`.sample/CONTOSO-BANK.json`](.sample/CONTOSO-BANK.json) | Mirrors the standard **Contoso Bank** module — covers Bank Account Posting Groups, Bank Export/Import Setup, Payment Methods, Bank Accounts, Gen. Journal Batches, and Payment Registration Setup. Useful as a starting point or to verify that your environment produces output matching the official Contoso Bank pattern. |
+
+To use it: open the **Demo Data Modules** list page → **Import** → select the JSON file.
+
 ### Code Generation Details
 
 - Generates properly indented, formatted AL code
