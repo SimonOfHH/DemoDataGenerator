@@ -11,6 +11,7 @@ page 70102 "Table Selection Subpage"
     Caption = 'Table Selections';
     PageType = ListPart;
     SourceTable = "Table Selection";
+    SourceTableView = sorting("Module Code", "Sort Order");
     AutoSplitKey = true;
 
     layout
