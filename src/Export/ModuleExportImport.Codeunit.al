@@ -107,6 +107,8 @@ codeunit 70135 "Module Export Import"
                 TableJson.Add('helperGroup', TableSel."Helper Group");
                 TableJson.Add('sortOrder', TableSel."Sort Order");
                 TableJson.Add('alNamespace', TableSel."AL Namespace");
+                TableJson.Add('helperCodeunitName', TableSel."Helper Codeunit Name");
+                TableJson.Add('dataCodeunitName', TableSel."Data Codeunit Name");
                 TableJson.Add('fields', BuildFieldConfigsJson(ModuleCode, TableSel."Table ID"));
                 Arr.Add(TableJson);
             until TableSel.Next() = 0;
@@ -137,6 +139,7 @@ codeunit 70135 "Module Export Import"
                 FieldJson.Add('referenceTableId', FieldConfig."Reference Table ID");
                 FieldJson.Add('referenceFieldId', FieldConfig."Reference Field ID");
                 FieldJson.Add('lockedLabel', FieldConfig."Locked Label");
+                FieldJson.Add('relativeDate', FieldConfig."Relative Date".AsInteger());
                 Arr.Add(FieldJson);
             until FieldConfig.Next() = 0;
         exit(Arr);
@@ -240,6 +243,8 @@ codeunit 70135 "Module Export Import"
             TableSel."Helper Group" := CopyStr(GetJsonText(TableJson, 'helperGroup'), 1, MaxStrLen(TableSel."Helper Group"));
             TableSel."Sort Order" := GetJsonInt(TableJson, 'sortOrder');
             TableSel."AL Namespace" := CopyStr(GetJsonText(TableJson, 'alNamespace'), 1, MaxStrLen(TableSel."AL Namespace"));
+            TableSel."Helper Codeunit Name" := CopyStr(GetJsonText(TableJson, 'helperCodeunitName'), 1, MaxStrLen(TableSel."Helper Codeunit Name"));
+            TableSel."Data Codeunit Name" := CopyStr(GetJsonText(TableJson, 'dataCodeunitName'), 1, MaxStrLen(TableSel."Data Codeunit Name"));
             TableSel.Insert(false);
 
             ReadFieldConfigsJson(TableJson, ModuleCode, TableSel."Table ID");
@@ -279,6 +284,7 @@ codeunit 70135 "Module Export Import"
             FieldConfig."Reference Table ID" := GetJsonInt(FieldJson, 'referenceTableId');
             FieldConfig."Reference Field ID" := GetJsonInt(FieldJson, 'referenceFieldId');
             FieldConfig."Locked Label" := GetJsonBool(FieldJson, 'lockedLabel');
+            FieldConfig."Relative Date" := "Relative Date Option".FromInteger(GetJsonInt(FieldJson, 'relativeDate'));
 
             AppIdText := GetJsonText(FieldJson, 'sourceAppId');
             if Evaluate(AppIdGuid, AppIdText) then
