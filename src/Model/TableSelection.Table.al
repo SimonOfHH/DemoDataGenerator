@@ -30,7 +30,7 @@ table 70101 "Table Selection"
                 TableSelection: Record "Table Selection";
             begin
                 if AllObjWithCaption.Get(AllObjWithCaption."Object Type"::Table, "Table ID") then begin
-                    Rec."Table Name" := AllObjWithCaption."Object Caption";
+                    Rec."Table Name" := AllObjWithCaption."Object Name";
                     Rec."AL Namespace" := AllObjWithCaption."AL Namespace";
                     if Rec."Helper Group" = '' then
                         Rec."Helper Group" := GetDefaultHelperGroup(AllObjWithCaption."Object Caption");
