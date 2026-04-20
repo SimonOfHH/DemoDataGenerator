@@ -89,6 +89,8 @@ codeunit 70121 "Data Generator"
 
         // Read live data and generate Insert calls
         RecRef.Open(TableSel."Table ID");
+        if TableSel."Table View" <> '' then
+            RecRef.SetView(TableSel."Table View");
         if RecRef.FindSet() then
             repeat
                 OnRunProc.AddCodeLine(

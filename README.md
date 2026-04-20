@@ -44,6 +44,7 @@ The generated code follows the exact same patterns used in Microsoft's own Conto
 - Assign data levels: Setup Data, Master Data, Transaction Data, Historical Data
 - Group tables by helper codeunit (e.g., all bank-related tables share one "Contoso Bank" helper)
 - Customizable helper and data codeunit names (with 30-char limit awareness)
+- **Table filtering** — use **Apply Filter** to open a `FilterPageBuilder` dialog for any selected table, define field filters interactively, and save the resulting view. The saved filter is applied at generation time so the generated data codeunit only inserts the matching subset of records. Use **Clear Filter** to remove a saved filter, and **Open Table with Filter** to browse the table with the saved filter pre-applied for verification.
 
 ### Field Behaviors
 
@@ -161,7 +162,7 @@ The generation pipeline:
 
 <!-- Add planned improvements and features here -->
 
-- [ ] **Record filtering** — Allow optional table filters (e.g. "Customer where Country = DE") so users can generate targeted subsets instead of full table dumps
+- [x] **Record filtering** — Allow optional table filters (e.g. "Customer where Country = DE") so users can generate targeted subsets instead of full table dumps
 - [ ] **Data preview / dry run** — Show a summary page before export (tables, record counts, codeunit count, estimated LOC) so users can verify scope before downloading
 - [ ] **Multi-module batch export** — "Generate All" action on the Module Definition List that assembles all modules into a single ZIP
 - [ ] **Media / MediaSet field support** — Handle image and blob fields via Base64 export and a corresponding import helper pattern
