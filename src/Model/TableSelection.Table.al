@@ -267,4 +267,22 @@ table 70101 "Table Selection"
         end;
         exit(CopyStr(TableCaption, 1, 100));
     end;
+
+    internal procedure SuggestDataLevel(OverwriteExisting: Boolean)
+    var
+        TableName: Text;
+    begin
+        if not OverwriteExisting and (Rec."Data Level" <> "Data Level"::" ") then
+            exit; // Don't overwrite existing data level
+
+        TableName := LowerCase(Rec."Table Name");
+        if TableName.Contains('setup') or TableName.Contains('config') or
+           TableName.Contains('posting group') or TableName.Contains('template') or
+           TableName.Contains('journal batch') or TableName.Contains('no. series')
+        then
+            Rec."Data Level" := "Data Level"::"Setup Data"
+        else
+            Rec."Data Level" := "Data Level"::"Master Data";
+    end;
+
 }

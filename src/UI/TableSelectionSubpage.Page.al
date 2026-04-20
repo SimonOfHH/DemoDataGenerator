@@ -128,21 +128,14 @@ page 70102 "Table Selection Subpage"
                 trigger OnAction()
                 var
                     TableSel: Record "Table Selection";
-                    TableName: Text;
                 begin
                     TableSel.CopyFilters(Rec);
                     if TableSel.FindSet() then
                         repeat
-                            TableName := LowerCase(TableSel."Table Name");
-                            if TableName.Contains('setup') or TableName.Contains('config') or
-                               TableName.Contains('posting group') or TableName.Contains('template') or
-                               TableName.Contains('journal batch') or TableName.Contains('no. series')
-                            then
-                                TableSel."Data Level" := "Data Level"::"Setup Data"
-                            else
-                                if TableSel."Data Level" = "Data Level"::" " then
-                                    TableSel."Data Level" := "Data Level"::"Master Data";
+                            TableSel.SuggestDataLevel(false);
+#pragma warning disable AA0214
                             TableSel.Modify(true);
+#pragma warning restore AA0214
                         until TableSel.Next() = 0;
                 end;
             }
