@@ -39,6 +39,7 @@ The generated code follows the exact same patterns used in Microsoft's own Conto
 ### Table Selection
 
 - Select any BC table via lookup
+- **Import from Config. Package** — pick an existing RapidStart / Configuration Package from the system; all its tables are added to the module in one step. Fields with `Include Field = true` in the package get `Behavior = Include`; everything else defaults to `Exclude`. Row filters defined in the package are imported as the Table View filter automatically.
 - Auto-populate field configurations from table metadata
 - Auto-detect primary key fields
 - Assign data levels: Setup Data, Master Data, Transaction Data, Historical Data

@@ -157,6 +157,21 @@ page 70101 "Module Definition Card"
                         end;
                 end;
             }
+            action(ImportFromConfigPackage)
+            {
+                ApplicationArea = All;
+                Caption = 'Import from Config. Package';
+                Image = ImportCodes;
+                ToolTip = 'Adds tables from an existing Configuration Package to this module. Fields with Include Field = true in the package are set to Behavior = Include; all other fields default to Exclude. Row filters defined in the package are imported as Table View.';
+
+                trigger OnAction()
+                var
+                    ConfigPackageImporter: Codeunit "Config. Package Importer";
+                begin
+                    ConfigPackageImporter.ImportFromConfigPackage(Rec);
+                    CurrPage.Update(false);
+                end;
+            }
             action(AutoPopulateFields)
             {
                 ApplicationArea = All;
@@ -284,6 +299,7 @@ page 70101 "Module Definition Card"
             {
                 Caption = 'Process';
                 actionref(AddTables_Promoted; AddTables) { }
+                actionref(ImportFromConfigPackage_Promoted; ImportFromConfigPackage) { }
                 actionref(AutoPopulate_Promoted; AutoPopulateFields) { }
                 actionref(Preview_Promoted; PreviewIdAllocation) { }
                 actionref(Generate_Promoted; GenerateAndDownload) { }
