@@ -93,25 +93,25 @@ codeunit 70135 "Module Export Import"
 
     local procedure BuildTableSelectionsJson(ModuleCode: Code[20]): JsonArray
     var
-        TableSel: Record "Table Selection";
+        TableSelection: Record "Table Selection";
         Arr: JsonArray;
         TableJson: JsonObject;
     begin
-        TableSel.SetRange("Module Code", ModuleCode);
-        if TableSel.FindSet() then
+        TableSelection.SetRange("Module Code", ModuleCode);
+        if TableSelection.FindSet() then
             repeat
                 Clear(TableJson);
-                TableJson.Add('tableId', TableSel."Table ID");
-                TableJson.Add('tableName', TableSel."Table Name");
-                TableJson.Add('dataLevel', TableSel."Data Level".AsInteger());
-                TableJson.Add('helperGroup', TableSel."Helper Group");
-                TableJson.Add('sortOrder', TableSel."Sort Order");
-                TableJson.Add('alNamespace', TableSel."AL Namespace");
-                TableJson.Add('helperCodeunitName', TableSel."Helper Codeunit Name");
-                TableJson.Add('dataCodeunitName', TableSel."Data Codeunit Name");
-                TableJson.Add('fields', BuildFieldConfigsJson(ModuleCode, TableSel."Table ID"));
+                TableJson.Add('tableId', TableSelection."Table ID");
+                TableJson.Add('tableName', TableSelection."Table Name");
+                TableJson.Add('dataLevel', TableSelection."Data Level".AsInteger());
+                TableJson.Add('helperGroup', TableSelection."Helper Group");
+                TableJson.Add('sortOrder', TableSelection."Sort Order");
+                TableJson.Add('alNamespace', TableSelection."AL Namespace");
+                TableJson.Add('helperCodeunitName', TableSelection."Helper Codeunit Name");
+                TableJson.Add('dataCodeunitName', TableSelection."Data Codeunit Name");
+                TableJson.Add('fields', BuildFieldConfigsJson(ModuleCode, TableSelection."Table ID"));
                 Arr.Add(TableJson);
-            until TableSel.Next() = 0;
+            until TableSelection.Next() = 0;
         exit(Arr);
     end;
 
@@ -216,7 +216,7 @@ codeunit 70135 "Module Export Import"
 
     local procedure ReadTableSelectionsJson(Json: JsonObject; ModuleCode: Code[20])
     var
-        TableSel: Record "Table Selection";
+        TableSelection: Record "Table Selection";
         Token: JsonToken;
         Arr: JsonArray;
         TableToken: JsonToken;
@@ -228,26 +228,26 @@ codeunit 70135 "Module Export Import"
         Arr := Token.AsArray();
 
         // Delete existing table selections (cascades to field configs via OnDelete)
-        TableSel.SetRange("Module Code", ModuleCode);
-        TableSel.DeleteAll(true);
+        TableSelection.SetRange("Module Code", ModuleCode);
+        TableSelection.DeleteAll(true);
 
         for i := 0 to Arr.Count - 1 do begin
             Arr.Get(i, TableToken);
             TableJson := TableToken.AsObject();
 
-            TableSel.Init();
-            TableSel."Module Code" := ModuleCode;
-            TableSel."Table ID" := GetJsonInt(TableJson, 'tableId');
-            TableSel."Table Name" := CopyStr(GetJsonText(TableJson, 'tableName'), 1, MaxStrLen(TableSel."Table Name"));
-            TableSel."Data Level" := "Data Level".FromInteger(GetJsonInt(TableJson, 'dataLevel'));
-            TableSel."Helper Group" := CopyStr(GetJsonText(TableJson, 'helperGroup'), 1, MaxStrLen(TableSel."Helper Group"));
-            TableSel."Sort Order" := GetJsonInt(TableJson, 'sortOrder');
-            TableSel."AL Namespace" := CopyStr(GetJsonText(TableJson, 'alNamespace'), 1, MaxStrLen(TableSel."AL Namespace"));
-            TableSel."Helper Codeunit Name" := CopyStr(GetJsonText(TableJson, 'helperCodeunitName'), 1, MaxStrLen(TableSel."Helper Codeunit Name"));
-            TableSel."Data Codeunit Name" := CopyStr(GetJsonText(TableJson, 'dataCodeunitName'), 1, MaxStrLen(TableSel."Data Codeunit Name"));
-            TableSel.Insert(false);
+            TableSelection.Init();
+            TableSelection."Module Code" := ModuleCode;
+            TableSelection."Table ID" := GetJsonInt(TableJson, 'tableId');
+            TableSelection."Table Name" := CopyStr(GetJsonText(TableJson, 'tableName'), 1, MaxStrLen(TableSelection."Table Name"));
+            TableSelection."Data Level" := "Data Level".FromInteger(GetJsonInt(TableJson, 'dataLevel'));
+            TableSelection."Helper Group" := CopyStr(GetJsonText(TableJson, 'helperGroup'), 1, MaxStrLen(TableSelection."Helper Group"));
+            TableSelection."Sort Order" := GetJsonInt(TableJson, 'sortOrder');
+            TableSelection."AL Namespace" := CopyStr(GetJsonText(TableJson, 'alNamespace'), 1, MaxStrLen(TableSelection."AL Namespace"));
+            TableSelection."Helper Codeunit Name" := CopyStr(GetJsonText(TableJson, 'helperCodeunitName'), 1, MaxStrLen(TableSelection."Helper Codeunit Name"));
+            TableSelection."Data Codeunit Name" := CopyStr(GetJsonText(TableJson, 'dataCodeunitName'), 1, MaxStrLen(TableSelection."Data Codeunit Name"));
+            TableSelection.Insert(false);
 
-            ReadFieldConfigsJson(TableJson, ModuleCode, TableSel."Table ID");
+            ReadFieldConfigsJson(TableJson, ModuleCode, TableSelection."Table ID");
         end;
     end;
 

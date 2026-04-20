@@ -80,7 +80,7 @@ codeunit 70122 "Module Generator"
 
     local procedure AddCreateDataProc(var ModuleCU: Codeunit "CodeGen Codeunit"; ModuleCode: Code[20]; ProcName: Text; Level: Enum "Data Level"; IsStub: Boolean)
     var
-        TableSel: Record "Table Selection";
+        TableSelection: Record "Table Selection";
         Proc: Codeunit "CodeGen Procedure";
         HasTables: Boolean;
         CodeunitRunPlaceholderLbl: Label 'Codeunit.Run(Codeunit::"%1");', Comment = 'Used in Create*Data procedures to run a data codeunit for a table, %1 = Codeunit Name', Locked = true;
@@ -88,19 +88,19 @@ codeunit 70122 "Module Generator"
         Clear(Proc);
         Proc.Init(ProcName);
 
-        TableSel.SetRange("Module Code", ModuleCode);
-        TableSel.SetRange("Data Level", Level);
-        TableSel.SetCurrentKey("Module Code", "Data Level", "Sort Order");
-        HasTables := TableSel.FindSet();
+        TableSelection.SetRange("Module Code", ModuleCode);
+        TableSelection.SetRange("Data Level", Level);
+        TableSelection.SetCurrentKey("Module Code", "Data Level", "Sort Order");
+        HasTables := TableSelection.FindSet();
 
         if HasTables then begin
             if IsStub then
                 Proc.AddCodeLine('// TODO: Review — auto-generated from selected tables');
             repeat
-                if TableSel."Data Codeunit Name" = '' then
-                    TableSel."Data Codeunit Name" := CopyStr(this.IdentifierHelper.GetCreateCodeunitName(TableSel."Table Name"), 1, MaxStrLen(TableSel."Data Codeunit Name"));
-                Proc.AddCodeLine(StrSubstNo(CodeunitRunPlaceholderLbl, TableSel."Data Codeunit Name"));
-            until TableSel.Next() = 0;
+                if TableSelection."Data Codeunit Name" = '' then
+                    TableSelection."Data Codeunit Name" := CopyStr(this.IdentifierHelper.GetCreateCodeunitName(TableSelection."Table Name"), 1, MaxStrLen(TableSelection."Data Codeunit Name"));
+                Proc.AddCodeLine(StrSubstNo(CodeunitRunPlaceholderLbl, TableSelection."Data Codeunit Name"));
+            until TableSelection.Next() = 0;
         end;
 
         ModuleCU.AddProcedure(Proc);

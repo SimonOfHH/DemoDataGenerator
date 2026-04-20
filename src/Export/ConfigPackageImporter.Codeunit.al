@@ -17,7 +17,7 @@ codeunit 70136 "Config. Package Importer"
         ConfigPackage: Record "Config. Package";
         ConfigPackageTable: Record "Config. Package Table";
         AllObjWithCaption: Record AllObjWithCaption;
-        TableSel: Record "Table Selection";
+        TableSelection: Record "Table Selection";
         ImportedCount: Integer;
         UpdatedCount: Integer;
     begin
@@ -32,16 +32,16 @@ codeunit 70136 "Config. Package Importer"
 
         repeat
             if AllObjWithCaption.Get(AllObjWithCaption."Object Type"::Table, ConfigPackageTable."Table ID") then begin
-                if not TableSel.Get(ModuleDefinition.Code, ConfigPackageTable."Table ID") then begin
-                    TableSel.Init();
-                    TableSel."Module Code" := ModuleDefinition.Code;
-                    TableSel.Validate("Table ID", ConfigPackageTable."Table ID");
-                    TableSel.Insert(true);
+                if not TableSelection.Get(ModuleDefinition.Code, ConfigPackageTable."Table ID") then begin
+                    TableSelection.Init();
+                    TableSelection."Module Code" := ModuleDefinition.Code;
+                    TableSelection.Validate("Table ID", ConfigPackageTable."Table ID");
+                    TableSelection.Insert(true);
                     ImportedCount += 1;
                 end else
                     UpdatedCount += 1;
                 this.ApplyConfigPackageBehaviors(ModuleDefinition.Code, ConfigPackage.Code, ConfigPackageTable."Table ID");
-                this.ApplyConfigPackageFilter(ConfigPackage.Code, ConfigPackageTable."Table ID", TableSel);
+                this.ApplyConfigPackageFilter(ConfigPackage.Code, ConfigPackageTable."Table ID", TableSelection);
             end;
         until ConfigPackageTable.Next() = 0;
 
@@ -78,7 +78,7 @@ codeunit 70136 "Config. Package Importer"
         exit(ConfigPackageField."Include Field");
     end;
 
-    local procedure ApplyConfigPackageFilter(PackageCode: Code[20]; TableId: Integer; var TableSel: Record "Table Selection")
+    local procedure ApplyConfigPackageFilter(PackageCode: Code[20]; TableId: Integer; var TableSelection: Record "Table Selection")
     var
         ConfigPackageFilter: Record "Config. Package Filter";
         RecRef: RecordRef;
@@ -104,8 +104,8 @@ codeunit 70136 "Config. Package Importer"
         if not FilterView.Contains('WHERE') then
             exit;
 
-        TableSel."Table View" := CopyStr(FilterView, 1, MaxStrLen(TableSel."Table View"));
-        TableSel.Modify();
+        TableSelection."Table View" := CopyStr(FilterView, 1, MaxStrLen(TableSelection."Table View"));
+        TableSelection.Modify();
     end;
 
     var

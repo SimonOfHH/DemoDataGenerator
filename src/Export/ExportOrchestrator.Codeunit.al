@@ -88,7 +88,7 @@ codeunit 70130 "Export Orchestrator"
 
     local procedure PreGenerateValidateModule(ModuleDef: Record "Module Definition")
     var
-        TableSel: Record "Table Selection";
+        TableSelection: Record "Table Selection";
         FieldConfig: Record "Field Configuration";
         ErrorInfoDetail: TextBuilder;
         ErrorInfoMsg: Label 'Module "%1" has validation errors which must be resolved before code generation can proceed. Please see details for more information.', Comment = '%1 = Module Name';
@@ -114,29 +114,29 @@ codeunit 70130 "Export Orchestrator"
             ErrorInfoDetail.AppendLine(MissingEnumValueErr);
 
         // At least one table selected
-        TableSel.SetRange("Module Code", ModuleDef.Code);
-        if TableSel.IsEmpty() then
+        TableSelection.SetRange("Module Code", ModuleDef.Code);
+        if TableSelection.IsEmpty() then
             ErrorInfoDetail.AppendLine(NoTablesSelectedErr);
 
         // Every table must have a Data Level assigned
-        TableSel.SetRange("Data Level", "Data Level"::" ");
-        if not TableSel.IsEmpty() then
+        TableSelection.SetRange("Data Level", "Data Level"::" ");
+        if not TableSelection.IsEmpty() then
             ErrorInfoDetail.AppendLine(MissingDataLevelErr);
 
         // Every table must have at least one non-excluded field
-        TableSel.SetRange("Data Level");
-        if TableSel.FindSet() then
+        TableSelection.SetRange("Data Level");
+        if TableSelection.FindSet() then
             repeat
-                if TableSel."Helper Codeunit Name" = '' then
-                    ErrorInfoDetail.AppendLine(StrSubstNo(MissingHelperCodeunitErr, TableSel."Table Name"));
-                if TableSel."Data Codeunit Name" = '' then
-                    ErrorInfoDetail.AppendLine(StrSubstNo(MissingDataCodeunitErr, TableSel."Table Name"));
-                FieldConfig.SetRange("Module Code", TableSel."Module Code");
-                FieldConfig.SetRange("Table ID", TableSel."Table ID");
+                if TableSelection."Helper Codeunit Name" = '' then
+                    ErrorInfoDetail.AppendLine(StrSubstNo(MissingHelperCodeunitErr, TableSelection."Table Name"));
+                if TableSelection."Data Codeunit Name" = '' then
+                    ErrorInfoDetail.AppendLine(StrSubstNo(MissingDataCodeunitErr, TableSelection."Table Name"));
+                FieldConfig.SetRange("Module Code", TableSelection."Module Code");
+                FieldConfig.SetRange("Table ID", TableSelection."Table ID");
                 FieldConfig.SetFilter(Behavior, '<>%1', FieldConfig.Behavior::Exclude);
                 if FieldConfig.IsEmpty() then
-                    ErrorInfoDetail.AppendLine(StrSubstNo(NoFieldsConfiguredErr, TableSel."Table Name"));
-            until TableSel.Next() = 0;
+                    ErrorInfoDetail.AppendLine(StrSubstNo(NoFieldsConfiguredErr, TableSelection."Table Name"));
+            until TableSelection.Next() = 0;
         if ErrorInfoDetail.Length() > 0 then begin
             ValidationErrorInfo.Title := ErrorInfoTitleLbl;
             ValidationErrorInfo.Message := StrSubstNo(ErrorInfoMsg, ModuleDef.Name);

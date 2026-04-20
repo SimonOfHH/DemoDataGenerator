@@ -26,19 +26,19 @@ codeunit 70121 "Data Generator"
     /// </summary>
     procedure Generate(ModuleDef: Record "Module Definition"; var ModuleContainer: Codeunit "CodeGen Module Container"): List of [Codeunit "CodeGen Codeunit"]
     var
-        TableSel: Record "Table Selection";
+        TableSelection: Record "Table Selection";
         DataCU: Codeunit "CodeGen Codeunit";
         Results: List of [Codeunit "CodeGen Codeunit"];
     begin
-        TableSel.SetRange("Module Code", ModuleDef.Code);
-        TableSel.SetCurrentKey("Module Code", "Data Level", "Sort Order");
-        if TableSel.FindSet() then
+        TableSelection.SetRange("Module Code", ModuleDef.Code);
+        TableSelection.SetCurrentKey("Module Code", "Data Level", "Sort Order");
+        if TableSelection.FindSet() then
             repeat
                 Clear(DataCU);
-                DataCU := this.GenerateForTable(TableSel, ModuleContainer.GetNextCodeunitId(true), ModuleDef."Base Namespace");
+                DataCU := this.GenerateForTable(TableSelection, ModuleContainer.GetNextCodeunitId(true), ModuleDef."Base Namespace");
                 Results.Add(DataCU);
                 ModuleContainer.AddDataCodeunit(DataCU);
-            until TableSel.Next() = 0;
+            until TableSelection.Next() = 0;
         exit(Results);
     end;
 
@@ -47,7 +47,7 @@ codeunit 70121 "Data Generator"
     /// builds an Insert call per row, and collects any complex arguments (labels, dynamic fields,
     /// token-label procedures) that need additional global variables or procedures in the codeunit.
     /// </summary>
-    local procedure GenerateForTable(TableSel: Record "Table Selection"; ObjectId: Integer; BaseNamespace: Text): Codeunit "CodeGen Codeunit"
+    local procedure GenerateForTable(TableSelection: Record "Table Selection"; ObjectId: Integer; BaseNamespace: Text): Codeunit "CodeGen Codeunit"
     var
         ModuleDefinition: Record "Module Definition";
         DataCU: Codeunit "CodeGen Codeunit";
@@ -61,13 +61,13 @@ codeunit 70121 "Data Generator"
         // Dynamic field tracking: ProcName is the unique key
         ComplexArguments: List of [Codeunit "CodeGen Argument"];
     begin
-        ModuleDefinition.Get(TableSel."Module Code");
-        HelperNames := this.GetHelperCodeunitNames(ModuleDefinition, TableSel);
+        ModuleDefinition.Get(TableSelection."Module Code");
+        HelperNames := this.GetHelperCodeunitNames(ModuleDefinition, TableSelection);
 
-        InsertProcName := this.IdentifierHelper.GetInsertProcedureName(TableSel."Table Name");
+        InsertProcName := this.IdentifierHelper.GetInsertProcedureName(TableSelection."Table Name");
 
-        DataCU.Initialize(ObjectId, TableSel."Data Codeunit Name");
-        DataCU.DataLevel(TableSel."Data Level");
+        DataCU.Initialize(ObjectId, TableSelection."Data Codeunit Name");
+        DataCU.DataLevel(TableSelection."Data Level");
 
         if BaseNamespace <> '' then begin
             DataCU.Namespace(BaseNamespace + '.DemoData');
@@ -85,21 +85,21 @@ codeunit 70121 "Data Generator"
             HelperVarName := this.ALFormatter.ToPascalCase(HelperTableName);
             OnRunProc.AddLocalVariable(VariableHelper.GetVariable(HelperVarName, 'Codeunit', 0, HelperTableName, ''));
         end;
-        HelperVarName := this.ALFormatter.ToPascalCase(TableSel."Helper Codeunit Name");
+        HelperVarName := this.ALFormatter.ToPascalCase(TableSelection."Helper Codeunit Name");
 
         // Read live data and generate Insert calls
-        RecRef.Open(TableSel."Table ID");
-        if TableSel."Table View" <> '' then
-            RecRef.SetView(TableSel."Table View");
+        RecRef.Open(TableSelection."Table ID");
+        if TableSelection."Table View" <> '' then
+            RecRef.SetView(TableSelection."Table View");
         if RecRef.FindSet() then
             repeat
                 OnRunProc.AddCodeLine(
-                    this.BuildInsertCall(TableSel, RecRef, HelperVarName, InsertProcName, ComplexArguments));
+                    this.BuildInsertCall(TableSelection, RecRef, HelperVarName, InsertProcName, ComplexArguments));
             until RecRef.Next() = 0;
         RecRef.Close();
 
         DataCU.AddProcedure(OnRunProc);
-        if this.ContainsDateFormula(ModuleDefinition, TableSel) then
+        if this.ContainsDateFormula(ModuleDefinition, TableSelection) then
             DataCU.AddProcedure(this.Templates.GetEvaluateDateFormulaProcedure());
 
         foreach ComplexArgument in ComplexArguments do begin
@@ -120,7 +120,7 @@ codeunit 70121 "Data Generator"
     end;
 
     local procedure BuildInsertCall(
-        TableSel: Record "Table Selection";
+        TableSelection: Record "Table Selection";
         RecRef: RecordRef;
         HelperVarName: Text;
         InsertProcName: Text;
@@ -135,8 +135,8 @@ codeunit 70121 "Data Generator"
         IsFirst := true;
 
         // PK fields first (same order as helper Insert procedure params)
-        FieldConfig.SetRange("Module Code", TableSel."Module Code");
-        FieldConfig.SetRange("Table ID", TableSel."Table ID");
+        FieldConfig.SetRange("Module Code", TableSelection."Module Code");
+        FieldConfig.SetRange("Table ID", TableSelection."Table ID");
         FieldConfig.SetRange("Is Primary Key", true);
         FieldConfig.SetCurrentKey("Module Code", "Table ID", "Sort Order");
         if FieldConfig.FindSet() then
@@ -289,12 +289,12 @@ codeunit 70121 "Data Generator"
         exit(DataType);
     end;
 
-    local procedure ContainsDateFormula(ModuleDefinition: Record "Module Definition"; TableSel: Record "Table Selection"): Boolean
+    local procedure ContainsDateFormula(ModuleDefinition: Record "Module Definition"; TableSelection: Record "Table Selection"): Boolean
     var
         FieldConfig: Record "Field Configuration";
     begin
         FieldConfig.SetRange("Module Code", ModuleDefinition.Code);
-        FieldConfig.SetRange("Table ID", TableSel."Table ID");
+        FieldConfig.SetRange("Table ID", TableSelection."Table ID");
         FieldConfig.SetFilter(Behavior, '<>%1', FieldConfig.Behavior::Exclude);
         FieldConfig.SetRange("Data Type", 'DateFormula');
         exit(not FieldConfig.IsEmpty());

@@ -127,16 +127,16 @@ page 70102 "Table Selection Subpage"
 
                 trigger OnAction()
                 var
-                    TableSel: Record "Table Selection";
+                    TableSelection: Record "Table Selection";
                 begin
-                    TableSel.CopyFilters(Rec);
-                    if TableSel.FindSet() then
+                    TableSelection.CopyFilters(Rec);
+                    if TableSelection.FindSet() then
                         repeat
-                            TableSel.SuggestDataLevel(false);
+                            TableSelection.SuggestDataLevel(false);
 #pragma warning disable AA0214
-                            TableSel.Modify(true);
+                            TableSelection.Modify(true);
 #pragma warning restore AA0214
-                        until TableSel.Next() = 0;
+                        until TableSelection.Next() = 0;
                 end;
             }
             group(TableActions)
