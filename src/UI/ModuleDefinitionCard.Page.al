@@ -69,6 +69,7 @@ page 70101 "Module Definition Card"
                 {
                     ApplicationArea = All;
                     ToolTip = 'Specifies the root namespace for the generated extension (e.g. Contoso.MyModule). Sub-namespaces .Helpers and .DemoData are derived automatically.';
+                    ShowMandatory = true;
                 }
                 field("Apps to Exclude"; Rec."Apps to Exclude")
                 {

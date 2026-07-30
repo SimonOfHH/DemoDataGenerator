@@ -113,6 +113,9 @@ codeunit 70130 "Export Orchestrator"
         if ModuleDef."Enum Value Name" = '' then
             ErrorInfoDetail.AppendLine(MissingEnumValueErr);
 
+        if ModuleDef."Base Namespace" = '' then
+            ErrorInfoDetail.AppendLine(MissingBaseNamespaceErr);
+
         // At least one table selected
         TableSelection.SetRange("Module Code", ModuleDef.Code);
         if TableSelection.IsEmpty() then
@@ -429,6 +432,7 @@ codeunit 70130 "Export Orchestrator"
         InvalidRangeErr: Label 'ID Range Start must be less than or equal to ID Range End.';
         MissingEnumOrdinalErr: Label 'Enum Ordinal must be specified (non-zero).';
         MissingEnumValueErr: Label 'Enum Value Name must be specified.';
+        MissingBaseNamespaceErr: Label 'Base Namespace must be specified.';
         NoTablesSelectedErr: Label 'At least one table must be selected.';
         MissingDataLevelErr: Label 'All selected tables must have a Data Level assigned.';
         NoFieldsConfiguredErr: Label 'Table "%1" has no fields configured (all excluded).', Comment = '%1 = Table Name';
