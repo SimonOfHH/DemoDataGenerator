@@ -78,31 +78,93 @@ codeunit 70122 "Module Generator"
         ModuleCU.AddProcedure(Proc);
     end;
 
+    /// <summary>
+    /// Builds a Create*Data procedure containing one Codeunit.Run call per generated data
+    /// codeunit at the given level. For Setup/Master levels this is one call per selected
+    /// table (matching "Data Generator"). For Transaction/Historical levels this is one call
+    /// per Document Group plus one per standalone (ungrouped) table (matching what "Document
+    /// Data Generator" actually emits for those levels).
+    /// </summary>
     local procedure AddCreateDataProc(var ModuleCU: Codeunit "CodeGen Codeunit"; ModuleCode: Code[20]; ProcName: Text; Level: Enum "Data Level"; IsStub: Boolean)
     var
-        TableSelection: Record "Table Selection";
         Proc: Codeunit "CodeGen Procedure";
-        HasTables: Boolean;
-        CodeunitRunPlaceholderLbl: Label 'Codeunit.Run(Codeunit::"%1");', Comment = 'Used in Create*Data procedures to run a data codeunit for a table, %1 = Codeunit Name', Locked = true;
+        CodeunitNames: List of [Text];
     begin
         Clear(Proc);
         Proc.Init(ProcName);
 
+        if IsStub then
+            CodeunitNames := this.GetStubCodeunitNames(ModuleCode, Level)
+        else
+            CodeunitNames := this.GetPerTableCodeunitNames(ModuleCode, Level);
+
+        this.AddCodeunitRunLines(Proc, CodeunitNames, IsStub);
+
+        ModuleCU.AddProcedure(Proc);
+    end;
+
+    local procedure AddCodeunitRunLines(var Proc: Codeunit "CodeGen Procedure"; CodeunitNames: List of [Text]; IsStub: Boolean)
+    var
+        CodeunitName: Text;
+        CodeunitRunPlaceholderLbl: Label 'Codeunit.Run(Codeunit::"%1");', Comment = 'Used in Create*Data procedures to run a data codeunit, %1 = Codeunit Name', Locked = true;
+    begin
+        if CodeunitNames.Count() = 0 then
+            exit;
+        if IsStub then
+            Proc.AddCodeLine('// TODO: Review — auto-generated from selected tables');
+        foreach CodeunitName in CodeunitNames do
+            Proc.AddCodeLine(StrSubstNo(CodeunitRunPlaceholderLbl, CodeunitName));
+    end;
+
+    /// <summary>
+    /// Returns one Data Codeunit Name per selected table at the given level, deriving and
+    /// caching a default name on the in-memory record when not already set.
+    /// </summary>
+    local procedure GetPerTableCodeunitNames(ModuleCode: Code[20]; Level: Enum "Data Level"): List of [Text]
+    var
+        TableSelection: Record "Table Selection";
+        Results: List of [Text];
+    begin
         TableSelection.SetRange("Module Code", ModuleCode);
         TableSelection.SetRange("Data Level", Level);
         TableSelection.SetCurrentKey("Module Code", "Data Level", "Sort Order");
-        HasTables := TableSelection.FindSet();
-
-        if HasTables then begin
-            if IsStub then
-                Proc.AddCodeLine('// TODO: Review — auto-generated from selected tables');
+        if TableSelection.FindSet() then
             repeat
                 if TableSelection."Data Codeunit Name" = '' then
                     TableSelection."Data Codeunit Name" := CopyStr(this.IdentifierHelper.GetCreateCodeunitName(TableSelection."Table Name"), 1, MaxStrLen(TableSelection."Data Codeunit Name"));
-                Proc.AddCodeLine(StrSubstNo(CodeunitRunPlaceholderLbl, TableSelection."Data Codeunit Name"));
+                Results.Add(TableSelection."Data Codeunit Name");
             until TableSelection.Next() = 0;
-        end;
+        exit(Results);
+    end;
 
-        ModuleCU.AddProcedure(Proc);
+    /// <summary>
+    /// Returns one codeunit name per Document Group at the given level, plus one per
+    /// standalone (ungrouped) table at that level - matching exactly what "Document Data
+    /// Generator" produces for Transaction/Historical data levels.
+    /// </summary>
+    local procedure GetStubCodeunitNames(ModuleCode: Code[20]; Level: Enum "Data Level"): List of [Text]
+    var
+        DocumentGroup: Record "Document Group";
+        TableSelection: Record "Table Selection";
+        Results: List of [Text];
+    begin
+        DocumentGroup.SetRange("Module Code", ModuleCode);
+        DocumentGroup.SetRange("Data Level", Level);
+        if DocumentGroup.FindSet() then
+            repeat
+                Results.Add(DocumentGroup.GetEffectiveDataCodeunitName());
+            until DocumentGroup.Next() = 0;
+
+        TableSelection.SetRange("Module Code", ModuleCode);
+        TableSelection.SetRange("Data Level", Level);
+        TableSelection.SetRange("Document Group Code", '');
+        TableSelection.SetCurrentKey("Module Code", "Data Level", "Sort Order");
+        if TableSelection.FindSet() then
+            repeat
+                if TableSelection."Data Codeunit Name" = '' then
+                    TableSelection."Data Codeunit Name" := CopyStr(this.IdentifierHelper.GetCreateCodeunitName(TableSelection."Table Name"), 1, MaxStrLen(TableSelection."Data Codeunit Name"));
+                Results.Add(TableSelection."Data Codeunit Name");
+            until TableSelection.Next() = 0;
+        exit(Results);
     end;
 }

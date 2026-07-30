@@ -18,6 +18,7 @@ codeunit 70130 "Export Orchestrator"
     var
         HelperGenerator: Codeunit "Helper Generator";
         DataGenerator: Codeunit "Data Generator";
+        DocumentDataGenerator: Codeunit "Document Data Generator";
         ModuleGenerator: Codeunit "Module Generator";
         EnumExtGenerator: Codeunit "Enum Extension Generator";
         AppManifestGenerator: Codeunit "App Manifest Generator";
@@ -38,6 +39,7 @@ codeunit 70130 "Export Orchestrator"
         this.ModuleGenerator.Generate(ModuleDef, ModuleContainer);
         this.HelperGenerator.Generate(ModuleDef, ModuleContainer);
         this.DataGenerator.Generate(ModuleDef, ModuleContainer);
+        this.DocumentDataGenerator.Generate(ModuleDef, ModuleContainer);
     end;
 
     /// <summary>
@@ -90,6 +92,8 @@ codeunit 70130 "Export Orchestrator"
     var
         TableSelection: Record "Table Selection";
         FieldConfig: Record "Field Configuration";
+        DocumentGroup: Record "Document Group";
+        DocumentGroupLink: Record "Document Group Link";
         ErrorInfoDetail: TextBuilder;
         ErrorInfoMsg: Label 'Module "%1" has validation errors which must be resolved before code generation can proceed. Please see details for more information.', Comment = '%1 = Module Name';
         ErrorInfoTitleLbl: Label 'Validation Errors';
@@ -140,6 +144,27 @@ codeunit 70130 "Export Orchestrator"
                 if FieldConfig.IsEmpty() then
                     ErrorInfoDetail.AppendLine(StrSubstNo(NoFieldsConfiguredErr, TableSelection."Table Name"));
             until TableSelection.Next() = 0;
+
+        // Every Document Group must have exactly one Header table assigned
+        DocumentGroup.SetRange("Module Code", ModuleDef.Code);
+        if DocumentGroup.FindSet() then
+            repeat
+                if DocumentGroup.GetHeaderTableID() = 0 then
+                    ErrorInfoDetail.AppendLine(StrSubstNo(MissingGroupHeaderErr, DocumentGroup.Code));
+            until DocumentGroup.Next() = 0;
+
+        // Every Line-role table must have at least one Document Group Link field mapping configured
+        TableSelection.Reset();
+        TableSelection.SetRange("Module Code", ModuleDef.Code);
+        TableSelection.SetRange("Group Role", TableSelection."Group Role"::Line);
+        if TableSelection.FindSet() then
+            repeat
+                DocumentGroupLink.SetRange("Module Code", TableSelection."Module Code");
+                DocumentGroupLink.SetRange("Table ID", TableSelection."Table ID");
+                if DocumentGroupLink.IsEmpty() then
+                    ErrorInfoDetail.AppendLine(StrSubstNo(MissingGroupLinkErr, TableSelection."Table Name"));
+            until TableSelection.Next() = 0;
+
         if ErrorInfoDetail.Length() > 0 then begin
             ValidationErrorInfo.Title := ErrorInfoTitleLbl;
             ValidationErrorInfo.Message := StrSubstNo(ErrorInfoMsg, ModuleDef.Name);
@@ -154,6 +179,7 @@ codeunit 70130 "Export Orchestrator"
             ModuleDef,
             ModuleContainer.GetHelperCodeunits(),
             ModuleContainer.GetDataCodeunits(),
+            ModuleContainer.GetDataFiles(),
             ModuleContainer.GetModuleCodeunit(),
             ModuleContainer.GetEnumExtension(),
             ModuleContainer.GetManifestCodeunit());
@@ -163,12 +189,14 @@ codeunit 70130 "Export Orchestrator"
         ModuleDef: Record "Module Definition";
         HelperCUs: List of [Codeunit "CodeGen Codeunit"];
         DataCUs: List of [Codeunit "CodeGen Codeunit"];
+        DataFiles: List of [Codeunit "CodeGen Data File"];
         ModuleCU: Codeunit "CodeGen Codeunit";
         EnumExt: Codeunit "CodeGen Enum Extension";
         AppManifest: Codeunit "CodeGen App Manifest")
     var
         HelperCU: Codeunit "CodeGen Codeunit";
         DataCU: Codeunit "CodeGen Codeunit";
+        DataFile: Codeunit "CodeGen Data File";
         BasePath: Text;
         PublisherSafe, ModuleSafe : Text;
         DataLevelFolder: Text;
@@ -207,8 +235,20 @@ codeunit 70130 "Export Orchestrator"
                 DataCU.ToString());
         end;
 
+        // Transaction/Historical JSON data snapshots — next to their paired stub data codeunit
+        foreach DataFile in DataFiles do begin
+            DataLevelFolder := this.GetDataLevelFolder(DataFile.DataLevel());
+            this.ZipHelper.AddTextFile(
+                BasePath + 'src/' + DataLevelFolder + DataFile.FileName(),
+                DataFile.Content());
+        end;
+
         // Review & polish prompt for Copilot
         this.ZipHelper.AddTextFile(BasePath + '.github/prompts/review-generated-code.prompt.md', this.GetReviewPromptContent());
+
+        // Transaction/Historical data generation prompt for Copilot (only relevant when such data was captured)
+        if DataFiles.Count() > 0 then
+            this.ZipHelper.AddTextFile(BasePath + '.github/prompts/generate-transaction-data.prompt.md', this.GetTransactionDataPromptContent());
 
         // Download
         this.ZipHelper.Download(PublisherSafe + '_' + ModuleSafe + '_' + ModuleDef."App Version" + '.zip');
@@ -268,8 +308,8 @@ codeunit 70130 "Export Orchestrator"
         Content.AppendLine('| `src/Helpers/<Name>.Codeunit.al` | Insert* procedures - one per configured helper group |');
         Content.AppendLine('| `src/1.Setup Data/` | Data codeunits for Setup Data level |');
         Content.AppendLine('| `src/2.Master Data/` | Data codeunits for Master Data level |');
-        Content.AppendLine('| `src/3.Transactions/` | Skeleton only - NOT implemented, see item 6 below |');
-        Content.AppendLine('| `src/4.Historical Data/` | Skeleton only - NOT implemented, see item 6 below |');
+        Content.AppendLine('| `src/3.Transactions/` | Stub codeunits + `*.data.json` snapshots - see item 6 below |');
+        Content.AppendLine('| `src/4.Historical Data/` | Stub codeunits + `*.data.json` snapshots - see item 6 below |');
         Content.AppendLine('');
         Content.AppendLine('---');
         Content.AppendLine('');
@@ -344,14 +384,14 @@ codeunit 70130 "Export Orchestrator"
         Content.AppendLine('- Add a `// TODO` comment where the correct key values need to be sourced from the original data.');
         Content.AppendLine('');
         // 6. Transaction / Historical data
-        Content.AppendLine('### 6. Transaction and Historical Data - Requires Manual Implementation');
+        Content.AppendLine('### 6. Transaction and Historical Data - Generate from the JSON Snapshot');
         Content.AppendLine('');
-        Content.AppendLine('Data codeunits in `3.Transactions/` and `4.Historical Data/` contain only skeleton procedures (`CreateTransactionalData()` / `CreateHistoricalData()`). The generator does not implement them because transactional and historical data require posting documents, which cannot be reliably automated from a static data snapshot.');
+        Content.AppendLine('Data codeunits in `3.Transactions/` and `4.Historical Data/` contain only a `// TODO` stub. Instead of unreliable literal `Insert` calls, the generator captured the live document data as JSON snapshot(s) next to each stub codeunit (`*.data.json`).');
         Content.AppendLine('');
         Content.AppendLine('**Actions:**');
         Content.AppendLine('');
-        Content.AppendLine('- Implement these manually following Contoso patterns in existing modules (e.g. ContosoSales, ContosoPurchase).');
-        Content.AppendLine('- Or remove these tables from Transactions/Historical level if they are not relevant for demo posting.');
+        Content.AppendLine('- Run the bundled `.github/prompts/generate-transaction-data.prompt.md` Copilot prompt for each stub codeunit, attaching the relevant BC symbols it asks for.');
+        Content.AppendLine('- Or remove these tables/groups from Transactions/Historical level if they are not relevant for demo posting.');
         Content.AppendLine('');
         // 7. Sensitive / environment-specific records
         Content.AppendLine('### 7. Remove Sensitive or Environment-Specific Records');
@@ -426,6 +466,75 @@ codeunit 70130 "Export Orchestrator"
         exit(Content.ToText());
     end;
 
+    /// <summary>
+    /// Builds the Copilot prompt guiding the dev through turning a captured Transaction/Historical
+    /// JSON data snapshot (and dev-supplied BC symbols) into a real data codeunit, replacing the
+    /// generated stub. Historical Data additionally asks for a posting step after document creation.
+    /// </summary>
+    local procedure GetTransactionDataPromptContent(): Text
+    var
+        Content: TextBuilder;
+    begin
+        // YAML frontmatter
+        Content.AppendLine('---');
+        Content.AppendLine('agent: ''agent''');
+        Content.AppendLine('description: ''Generate Transaction/Historical data codeunits from a captured JSON snapshot''');
+        Content.AppendLine('---');
+        Content.AppendLine('');
+        Content.AppendLine('# Generate Transaction/Historical Data From JSON Snapshot');
+        Content.AppendLine('');
+        Content.AppendLine('This extension has one or more stub data codeunits in `src/3.Transactions/` and/or `src/4.Historical Data/` whose `OnRun` trigger only contains a `// TODO` comment. Next to each stub codeunit is a `*.data.json` file - a raw snapshot of the live source data, captured because generating reliable AL for documents/postings generically is not possible from a static data snapshot (this is a known, deliberate limitation of the generator; see the tool''s README).');
+        Content.AppendLine('');
+        Content.AppendLine('Your job: replace each stub''s `// TODO` body with real AL that (re)creates the data described in its paired JSON file.');
+        Content.AppendLine('');
+        Content.AppendLine('---');
+        Content.AppendLine('');
+        Content.AppendLine('## JSON Snapshot Shape');
+        Content.AppendLine('');
+        Content.AppendLine('Two shapes are used, depending on whether the tables were configured as a Document Group in the generator:');
+        Content.AppendLine('');
+        Content.AppendLine('- **Grouped (Header + Line tables)**: a JSON array of documents. Each document object has one property per Header field, plus one array property per Line table (keyed by the Line table''s name) containing that document''s correlated line rows.');
+        Content.AppendLine('- **Standalone (no Document Group)**: a flat JSON array, one object per row, one property per configured field. No correlation between files is implied.');
+        Content.AppendLine('');
+        Content.AppendLine('All values were captured as their live, raw display value (numbers/booleans stay typed; dates, codes, enums, etc. are formatted text). Treat the JSON purely as reference data to recreate - do not assume it is already in the exact format your target fields expect.');
+        Content.AppendLine('');
+        Content.AppendLine('---');
+        Content.AppendLine('');
+        Content.AppendLine('## Before You Ask Copilot to Generate Code');
+        Content.AppendLine('');
+        Content.AppendLine('Attach the relevant BC symbols to the chat context so Copilot can generate correct, compiling code instead of guessing:');
+        Content.AppendLine('');
+        Content.AppendLine('- The standard BC table(s)/page(s) involved (e.g. `Sales Header`, `Sales Line`), if this is a standard document type.');
+        Content.AppendLine('- Any bespoke/custom codeunits or libraries in this workspace that already provide document-creation helpers - prefer those over hand-rolled `Insert` calls.');
+        Content.AppendLine('- The paired `*.data.json` file itself.');
+        Content.AppendLine('');
+        Content.AppendLine('---');
+        Content.AppendLine('');
+        Content.AppendLine('## What To Generate');
+        Content.AppendLine('');
+        Content.AppendLine('- **Transaction Data**: create the open document(s)/record(s) described in the JSON only. Do not post anything.');
+        Content.AppendLine('- **Historical Data**: create the same open document(s), then also invoke the correct posting routine so the data ends up posted, matching how the Contoso Coffee Demo Dataset itself separates "create" (`3.Transactions/`) from "create + post" (`4.Historical Data/`, e.g. see `Create Posted Sales Data` / `Create Posted Analytics Data` in the Contoso repository for the pattern).');
+        Content.AppendLine('- Follow the existing Contoso coding patterns used elsewhere in this extension/workspace (Get/Validate/Insert style helpers, Tok/Lbl label conventions) - see `Coding-Patterns.md` in the Contoso Coffee Demo Dataset repository.');
+        Content.AppendLine('- Posting requires the target company to already have consistent, matching Setup/Master data (G/L Accounts, VAT Posting Setup, No. Series, Posting Groups, Dimensions). If posting fails locally, check that setup first before assuming the generated code is wrong.');
+        Content.AppendLine('');
+        Content.AppendLine('---');
+        Content.AppendLine('');
+        Content.AppendLine('## Reference: Common Document Type -> Posting Codeunit');
+        Content.AppendLine('');
+        Content.AppendLine('**This table is a non-exhaustive starting point only.** Always search the attached symbols and this workspace first for a local or bespoke posting routine, and prioritize that over anything listed here.');
+        Content.AppendLine('');
+        Content.AppendLine('| Document / Journal | Typical Posting Codeunit |');
+        Content.AppendLine('|---|---|');
+        Content.AppendLine('| Sales Header (Order/Invoice/...) | `Sales-Post` |');
+        Content.AppendLine('| Purchase Header (Order/Invoice/...) | `Purch.-Post` |');
+        Content.AppendLine('| Gen. Journal Line | `Gen. Jnl.-Post Line` |');
+        Content.AppendLine('| Item Journal Line | `Item Jnl.-Post Line` |');
+        Content.AppendLine('| FA Journal Line | `FA Jnl.-Post Line` |');
+        Content.AppendLine('| Transfer Header | `TransferOrder-Post Shipment` / `TransferOrder-Post Receipt` |');
+        Content.AppendLine('');
+        exit(Content.ToText());
+    end;
+
     var
         MissingNameErr: Label 'Module Name must be specified.';
         MissingRangeErr: Label 'ID Range Start and End must be specified.';
@@ -440,4 +549,6 @@ codeunit 70130 "Export Orchestrator"
         GenerationCompleteMsg: Label 'Module "%1" generated successfully. The zip file has been downloaded.', Comment = '%1 = Module Name';
         MissingHelperCodeunitErr: Label 'Table "%1" has no Helper Codeunit Name specified.', Comment = '%1 = Table Name';
         MissingDataCodeunitErr: Label 'Table "%1" has no Data Codeunit Name specified.', Comment = '%1 = Table Name';
+        MissingGroupHeaderErr: Label 'Document Group "%1" has no Header table assigned.', Comment = '%1 = Document Group Code';
+        MissingGroupLinkErr: Label 'Table "%1" has Group Role = Line but no Document Group Link field mappings configured.', Comment = '%1 = Table Name';
 }

@@ -21,7 +21,9 @@ codeunit 70121 "Data Generator"
         Templates: Codeunit "Code Templates";
 
     /// <summary>
-    /// Generates all data codeunits for the given module.
+    /// Generates all Setup/Master data codeunits for the given module (literal Insert calls
+    /// from a live-data snapshot). Transaction/Historical tables are excluded here — see
+    /// "Document Data Generator" for how those are captured instead.
     /// Increments NextObjectId for each generated codeunit.
     /// </summary>
     procedure Generate(ModuleDef: Record "Module Definition"; var ModuleContainer: Codeunit "CodeGen Module Container"): List of [Codeunit "CodeGen Codeunit"]
@@ -31,6 +33,7 @@ codeunit 70121 "Data Generator"
         Results: List of [Codeunit "CodeGen Codeunit"];
     begin
         TableSelection.SetRange("Module Code", ModuleDef.Code);
+        TableSelection.SetFilter("Data Level", '<>%1&<>%2', TableSelection."Data Level"::"Transaction Data", TableSelection."Data Level"::"Historical Data");
         TableSelection.SetCurrentKey("Module Code", "Data Level", "Sort Order");
         if TableSelection.FindSet() then
             repeat

@@ -13,6 +13,7 @@ codeunit 70126 "CodeGen Module Container"
         EnumExt: Codeunit "CodeGen Enum Extension";
         HelperCodeunits: List of [Codeunit "CodeGen Codeunit"];
         DataCodeunits: List of [Codeunit "CodeGen Codeunit"];
+        DataFiles: List of [Codeunit "CodeGen Data File"];
         ObjectIds: Dictionary of [Text, Integer];
 
     procedure Init(StartIdRange: Integer)
@@ -64,6 +65,11 @@ codeunit 70126 "CodeGen Module Container"
         this.DataCodeunits.Add(Codeunit);
     end;
 
+    procedure AddDataFile(DataFile: Codeunit "CodeGen Data File")
+    begin
+        this.DataFiles.Add(DataFile);
+    end;
+
     procedure AddManifestCodeunit(Manifest: Codeunit "CodeGen App Manifest")
     begin
         this.ManifestCodeunit := Manifest;
@@ -87,6 +93,11 @@ codeunit 70126 "CodeGen Module Container"
     procedure GetDataCodeunits(): List of [Codeunit "CodeGen Codeunit"]
     begin
         exit(this.DataCodeunits);
+    end;
+
+    procedure GetDataFiles(): List of [Codeunit "CodeGen Data File"]
+    begin
+        exit(this.DataFiles);
     end;
 
     procedure GetManifestCodeunit(): Codeunit "CodeGen App Manifest"
