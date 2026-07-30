@@ -117,6 +117,49 @@ table 70101 "Table Selection"
             Caption = 'Data Codeunit Name';
             Description = 'Optional name for the generated data codeunit. If not specified, a default name will be used.';
         }
+        field(115; "Document Group Code"; Code[20])
+        {
+            Caption = 'Document Group Code';
+            Description = 'Assigns this table to a Document Group (e.g. Sales Header + Sales Line = "Sales Document") so Transaction/Historical data is captured as one correlated JSON snapshot instead of independent per-table snapshots. Only valid for Data Level Transaction Data or Historical Data.';
+            TableRelation = "Document Group".Code where("Module Code" = field("Module Code"));
+
+            trigger OnValidate()
+            var
+                DocumentGroup: Record "Document Group";
+            begin
+                if Rec."Document Group Code" = '' then begin
+                    Rec."Group Role" := Rec."Group Role"::" ";
+                    exit;
+                end;
+                Rec.TestField("Data Level");
+                if not (Rec."Data Level" in [Rec."Data Level"::"Transaction Data", Rec."Data Level"::"Historical Data"]) then
+                    Error(OnlyTransactionOrHistoricalErr);
+                DocumentGroup.Get(Rec."Module Code", Rec."Document Group Code");
+                if DocumentGroup."Data Level" <> Rec."Data Level" then
+                    Error(DataLevelMismatchErr, DocumentGroup."Data Level");
+            end;
+        }
+        field(116; "Group Role"; Enum "Document Group Role")
+        {
+            Caption = 'Group Role';
+            Description = 'Whether this table is the Header or a Line/child table within its Document Group.';
+
+            trigger OnValidate()
+            var
+                OtherTableSelection: Record "Table Selection";
+            begin
+                if Rec."Group Role" <> Rec."Group Role"::" " then
+                    Rec.TestField("Document Group Code");
+                if Rec."Group Role" = Rec."Group Role"::Header then begin
+                    OtherTableSelection.SetRange("Module Code", Rec."Module Code");
+                    OtherTableSelection.SetRange("Document Group Code", Rec."Document Group Code");
+                    OtherTableSelection.SetRange("Group Role", Rec."Group Role"::Header);
+                    OtherTableSelection.SetFilter("Table ID", '<>%1', Rec."Table ID");
+                    if not OtherTableSelection.IsEmpty() then
+                        Error(GroupAlreadyHasHeaderErr, Rec."Document Group Code");
+                end;
+            end;
+        }
     }
 
     keys
@@ -143,11 +186,21 @@ table 70101 "Table Selection"
     trigger OnDelete()
     var
         FieldConfiguration: Record "Field Configuration";
+        DocumentGroupLink: Record "Document Group Link";
     begin
         FieldConfiguration.SetRange("Module Code", "Module Code");
         FieldConfiguration.SetRange("Table ID", "Table ID");
         FieldConfiguration.DeleteAll(true);
+
+        DocumentGroupLink.SetRange("Module Code", "Module Code");
+        DocumentGroupLink.SetRange("Table ID", "Table ID");
+        DocumentGroupLink.DeleteAll(true);
     end;
+
+    var
+        OnlyTransactionOrHistoricalErr: Label 'Document Group Code can only be set when Data Level is "Transaction Data" or "Historical Data".';
+        DataLevelMismatchErr: Label 'This table''s Data Level must match the Document Group''s Data Level (%1).', Comment = '%1 = Data Level';
+        GroupAlreadyHasHeaderErr: Label 'Document Group "%1" already has a Header table. A group can only have one Header.', Comment = '%1 = Document Group Code';
 
     procedure PopulateNames()
     var

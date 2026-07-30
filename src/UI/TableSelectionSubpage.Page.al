@@ -45,6 +45,16 @@ page 70102 "Table Selection Subpage"
                     ApplicationArea = All;
                     ToolTip = 'Specifies the generation order within a data level.';
                 }
+                field("Document Group Code"; Rec."Document Group Code")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the Document Group this table belongs to (e.g. Sales Header + Sales Line = "Sales Document"). Only valid for Transaction Data or Historical Data.';
+                }
+                field("Group Role"; Rec."Group Role")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies whether this table is the Header or a Line/child table within its Document Group.';
+                }
                 field("No. of Fields"; Rec."No. of Fields")
                 {
                     ApplicationArea = All;
@@ -116,6 +126,26 @@ page 70102 "Table Selection Subpage"
                 begin
                     Rec.PopulateFields();
                     Message(FieldsPopulatedMsg, Rec."Table Name");
+                end;
+            }
+            action(ConfigureGroupLinks)
+            {
+                ApplicationArea = All;
+                Caption = 'Configure Group Links';
+                Image = Relationship;
+                ToolTip = 'Map this (Line) table''s key fields to its Document Group''s Header table fields.';
+                Scope = Repeater;
+
+                trigger OnAction()
+                var
+                    DocumentGroupLink: Record "Document Group Link";
+                begin
+                    Rec.TestField("Document Group Code");
+                    if Rec."Group Role" <> Rec."Group Role"::Line then
+                        Error(NotALineTableErr);
+                    DocumentGroupLink.SetRange("Module Code", Rec."Module Code");
+                    DocumentGroupLink.SetRange("Table ID", Rec."Table ID");
+                    Page.RunModal(Page::"Document Group Link Subpage", DocumentGroupLink);
                 end;
             }
             action(AutoSuggestLevels)
@@ -214,6 +244,7 @@ page 70102 "Table Selection Subpage"
 
     var
         FieldsPopulatedMsg: Label 'Field configurations populated for table "%1".', Comment = '%1 = Table Name';
+        NotALineTableErr: Label 'Group Links can only be configured for tables with Group Role = Line.';
 
     [TryFunction]
     local procedure TryOpenTablePage(FilterView: Text)

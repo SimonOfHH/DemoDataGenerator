@@ -123,6 +123,12 @@ page 70101 "Module Definition Card"
                 Caption = 'Selected Tables';
                 SubPageLink = "Module Code" = field(Code);
             }
+            part(DocumentGroups; "Document Group Subpage")
+            {
+                ApplicationArea = All;
+                Caption = 'Document Groups';
+                SubPageLink = "Module Code" = field(Code);
+            }
             part(Dependencies; "Module Dependency Subpage")
             {
                 ApplicationArea = All;

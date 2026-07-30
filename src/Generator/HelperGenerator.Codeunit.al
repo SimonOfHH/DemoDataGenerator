@@ -30,8 +30,9 @@ codeunit 70120 "Helper Generator"
         HelperGroups: List of [Text];
         GroupName: Text;
     begin
-        // Collect unique helper groups
+        // Collect unique helper groups (Transaction/Historical tables are handled by Document Data Generator instead)
         TableSelection.SetRange("Module Code", ModuleDef.Code);
+        TableSelection.SetFilter("Data Level", '<>%1&<>%2', TableSelection."Data Level"::"Transaction Data", TableSelection."Data Level"::"Historical Data");
         if TableSelection.FindSet() then
             repeat
                 if not HelperGroups.Contains(TableSelection."Helper Group") then
@@ -68,9 +69,10 @@ codeunit 70120 "Helper Generator"
         UsedNamespaces: List of [Text];
     begin
         ModuleDefinition.Get(ModuleCode);
-        // Collect table names for Permissions property
+        // Collect table names for Permissions property (Transaction/Historical tables are handled by Document Data Generator instead)
         TableSelection.SetRange("Module Code", ModuleCode);
         TableSelection.SetRange("Helper Group", GroupName);
+        TableSelection.SetFilter("Data Level", '<>%1&<>%2', TableSelection."Data Level"::"Transaction Data", TableSelection."Data Level"::"Historical Data");
         if TableSelection.FindSet() then
             repeat
                 TableNames.Add(TableSelection."Table Name");
@@ -107,10 +109,11 @@ codeunit 70120 "Helper Generator"
         SetOverwriteProc.AddCodeLine('OverwriteData := Overwrite;');
         HelperCU.AddProcedure(SetOverwriteProc);
 
-        // Generate one Insert* procedure per table in this group
+        // Generate one Insert* procedure per table in this group (Transaction/Historical tables are handled by Document Data Generator instead)
         TableSelection.Reset();
         TableSelection.SetRange("Module Code", ModuleCode);
         TableSelection.SetRange("Helper Group", GroupName);
+        TableSelection.SetFilter("Data Level", '<>%1&<>%2', TableSelection."Data Level"::"Transaction Data", TableSelection."Data Level"::"Historical Data");
         TableSelection.SetCurrentKey("Module Code", "Data Level", "Sort Order");
         if TableSelection.FindSet() then
             repeat
@@ -137,9 +140,10 @@ codeunit 70120 "Helper Generator"
         FieldConfig: Record "Field Configuration";
         ReferenceValues: List of [Codeunit "CodeGen Reference Value"];
     begin
-        // Find all tables in this helper group — these are potential reference targets
+        // Find all tables in this helper group — these are potential reference targets (Transaction/Historical tables are handled by Document Data Generator instead)
         ReferencedTable.SetRange("Module Code", ModuleDefinition.Code);
         ReferencedTable.SetRange("Helper Group", GroupName);
+        ReferencedTable.SetFilter("Data Level", '<>%1&<>%2', ReferencedTable."Data Level"::"Transaction Data", ReferencedTable."Data Level"::"Historical Data");
         if not ReferencedTable.FindSet() then
             exit;
         repeat
