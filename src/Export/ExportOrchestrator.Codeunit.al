@@ -203,7 +203,7 @@ codeunit 70130 "Export Orchestrator"
     begin
         PublisherSafe := this.ALFormatter.SanitizeIdentifier(ModuleDef.Publisher);
         ModuleSafe := this.ALFormatter.SanitizeIdentifier(ModuleDef.Name);
-        BasePath := ModuleSafe + '/';
+        BasePath := '';
 
         this.ZipHelper.Initialize();
 
