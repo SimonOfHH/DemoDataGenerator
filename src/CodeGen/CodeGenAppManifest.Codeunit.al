@@ -10,6 +10,7 @@ codeunit 70114 "CodeGen App Manifest"
     InherentPermissions = X;
 
     var
+        ALFormatter: Codeunit SimonOfHH.DemoData.Core."AL Formatter";
         ManifestJson: JsonObject;
         Dependencies: JsonArray;
         AppId: Guid;
@@ -117,7 +118,7 @@ codeunit 70114 "CodeGen App Manifest"
     var
         Dependency: JsonObject;
     begin
-        Dependency.Add('id', DepId);
+        Dependency.Add('id', ALFormatter.RemoveCurlyBraces(DepId));
         Dependency.Add('name', DepName);
         Dependency.Add('publisher', DepPublisher);
         Dependency.Add('version', DepVersion);
