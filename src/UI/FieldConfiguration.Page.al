@@ -8,6 +8,7 @@ using SimonOfHH.DemoData.Model;
 page 70103 "Field Configuration"
 {
     ApplicationArea = All;
+    UsageCategory = None;
     Caption = 'Field Configuration';
     PageType = List;
     SourceTable = "Field Configuration";

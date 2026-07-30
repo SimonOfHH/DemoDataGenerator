@@ -28,9 +28,12 @@ table 70101 "Table Selection"
             var
                 AllObjWithCaption: Record AllObjWithCaption;
                 TableSelection: Record "Table Selection";
+                CurrLanguage: Integer;
             begin
+                CurrLanguage := GlobalLanguage();
+                GlobalLanguage(1033); // Ensure we are using English for table names
                 if AllObjWithCaption.Get(AllObjWithCaption."Object Type"::Table, "Table ID") then begin
-                    Rec."Table Name" := AllObjWithCaption."Object Caption";
+                    Rec."Table Name" := AllObjWithCaption."Object Name";
                     Rec."AL Namespace" := AllObjWithCaption."AL Namespace";
                     if Rec."Helper Group" = '' then
                         Rec."Helper Group" := GetDefaultHelperGroup(AllObjWithCaption."Object Caption");
@@ -38,6 +41,7 @@ table 70101 "Table Selection"
                         PopulateFields();
                 end;
                 PopulateNames();
+                GlobalLanguage(CurrLanguage); // Restore the original language  
             end;
 
             trigger OnLookup()
@@ -79,6 +83,24 @@ table 70101 "Table Selection"
             FieldClass = FlowField;
             CalcFormula = count("Field Configuration" where("Module Code" = field("Module Code"), "Table ID" = field("Table ID"), Behavior = filter(<> Exclude)));
             Editable = false;
+        }
+        field(30; "Table View"; Text[2048])
+        {
+            Caption = 'Table View';
+            Description = 'Optional filter to apply when generating code for this table. This can be used to limit the generated code to a subset of the data in this table. The filter should be specified in the format "FieldName=Value". For example, "CountryRegionCode=''US''" would generate code only for records where the CountryRegionCode field is blank or US.';
+
+            trigger OnValidate()
+            var
+                RecRef: RecordRef;
+            begin
+                Rec.TestField("Table ID");
+                if Rec."Table View" = '' then
+                    exit; // Empty filter is valid, it means no filter will be applied
+                RecRef.Open(Rec."Table ID");
+                RecRef.SetView(Rec."Table View");
+                if RecRef.IsEmpty() then
+                    Message('The specified filter does not yield any results. Please make sure the filter is in the correct format and that it references existing fields and values in the table.');
+            end;
         }
         field(100; "AL Namespace"; Text[500])
         {
@@ -249,4 +271,22 @@ table 70101 "Table Selection"
         end;
         exit(CopyStr(TableCaption, 1, 100));
     end;
+
+    internal procedure SuggestDataLevel(OverwriteExisting: Boolean)
+    var
+        TableName: Text;
+    begin
+        if not OverwriteExisting and (Rec."Data Level" <> "Data Level"::" ") then
+            exit; // Don't overwrite existing data level
+
+        TableName := LowerCase(Rec."Table Name");
+        if TableName.Contains('setup') or TableName.Contains('config') or
+           TableName.Contains('posting group') or TableName.Contains('template') or
+           TableName.Contains('journal batch') or TableName.Contains('no. series')
+        then
+            Rec."Data Level" := "Data Level"::"Setup Data"
+        else
+            Rec."Data Level" := "Data Level"::"Master Data";
+    end;
+
 }

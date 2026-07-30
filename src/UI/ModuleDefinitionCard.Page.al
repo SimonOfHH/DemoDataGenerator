@@ -69,6 +69,7 @@ page 70101 "Module Definition Card"
                 {
                     ApplicationArea = All;
                     ToolTip = 'Specifies the root namespace for the generated extension (e.g. Contoso.MyModule). Sub-namespaces .Helpers and .DemoData are derived automatically.';
+                    ShowMandatory = true;
                 }
                 field("Apps to Exclude"; Rec."Apps to Exclude")
                 {
@@ -145,16 +146,31 @@ page 70101 "Module Definition Card"
                 trigger OnAction()
                 var
                     AllObj: Record AllObjWithCaption;
-                    TableSel: Record "Table Selection";
+                    TableSelection: Record "Table Selection";
                 begin
                     AllObj.SetRange("Object Type", AllObj."Object Type"::Table);
                     if Page.RunModal(Page::"All Objects with Caption", AllObj) = Action::LookupOK then
-                        if not TableSel.Get(Rec.Code, AllObj."Object ID") then begin
-                            TableSel.Init();
-                            TableSel."Module Code" := Rec.Code;
-                            TableSel.Validate("Table ID", AllObj."Object ID");
-                            TableSel.Insert(true);
+                        if not TableSelection.Get(Rec.Code, AllObj."Object ID") then begin
+                            TableSelection.Init();
+                            TableSelection."Module Code" := Rec.Code;
+                            TableSelection.Validate("Table ID", AllObj."Object ID");
+                            TableSelection.Insert(true);
                         end;
+                end;
+            }
+            action(ImportFromConfigPackage)
+            {
+                ApplicationArea = All;
+                Caption = 'Import from Config. Package';
+                Image = ImportCodes;
+                ToolTip = 'Adds tables from an existing Configuration Package to this module. Fields with Include Field = true in the package are set to Behavior = Include; all other fields default to Exclude. Row filters defined in the package are imported as Table View.';
+
+                trigger OnAction()
+                var
+                    ConfigPackageImporter: Codeunit "Config. Package Importer";
+                begin
+                    ConfigPackageImporter.ImportFromConfigPackage(Rec);
+                    CurrPage.Update(false);
                 end;
             }
             action(AutoPopulateFields)
@@ -166,13 +182,13 @@ page 70101 "Module Definition Card"
 
                 trigger OnAction()
                 var
-                    TableSel: Record "Table Selection";
+                    TableSelection: Record "Table Selection";
                 begin
-                    TableSel.SetRange("Module Code", Rec.Code);
-                    if TableSel.FindSet() then
+                    TableSelection.SetRange("Module Code", Rec.Code);
+                    if TableSelection.FindSet() then
                         repeat
-                            TableSel.PopulateFields();
-                        until TableSel.Next() = 0;
+                            TableSelection.PopulateFields();
+                        until TableSelection.Next() = 0;
                     Message(FieldsPopulatedMsg);
                 end;
             }
@@ -284,6 +300,7 @@ page 70101 "Module Definition Card"
             {
                 Caption = 'Process';
                 actionref(AddTables_Promoted; AddTables) { }
+                actionref(ImportFromConfigPackage_Promoted; ImportFromConfigPackage) { }
                 actionref(AutoPopulate_Promoted; AutoPopulateFields) { }
                 actionref(Preview_Promoted; PreviewIdAllocation) { }
                 actionref(Generate_Promoted; GenerateAndDownload) { }

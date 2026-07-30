@@ -82,7 +82,7 @@ codeunit 70115 "AL Formatter"
             FieldType::Guid:
                 begin
                     GuidValue := FldRef.Value;
-                    exit(Format(GuidValue, 0, 9));
+                    exit(AddSingleQuotes(RemoveCurlyBraces(Format(GuidValue, 0, 9))));
                 end;
             else
                 // Fallback: format as text literal
@@ -252,6 +252,11 @@ codeunit 70115 "AL Formatter"
         end;
 
         exit(Name);
+    end;
+
+    procedure RemoveCurlyBraces(Input: Text): Text
+    begin
+        exit(Input.Replace('{', '').Replace('}', ''));
     end;
 
     procedure GetHelperDictionary(): Dictionary of [Text, Text]
