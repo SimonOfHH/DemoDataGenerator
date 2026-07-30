@@ -43,6 +43,7 @@ The generated code follows the exact same patterns used in Microsoft's own Conto
 - Auto-populate field configurations from table metadata
 - Auto-detect primary key fields
 - Assign data levels: Setup Data, Master Data, Transaction Data, Historical Data
+- **Document Groups** — group a Header table with one or more Line tables (e.g. Sales Header + Sales Line = "Sales Document") so Transaction/Historical data is captured as one correlated JSON snapshot instead of independent per-table snapshots. Configure the Header/Line role and field-link mappings per table.
 - Group tables by helper codeunit (e.g., all bank-related tables share one "Contoso Bank" helper)
 - Customizable helper and data codeunit names (with 30-char limit awareness)
 - **Table filtering** — use **Apply Filter** to open a `FilterPageBuilder` dialog for any selected table, define field filters interactively, and save the resulting view. The saved filter is applied at generation time so the generated data codeunit only inserts the matching subset of records. Use **Clear Filter** to remove a saved filter, and **Open Table with Filter** to browse the table with the saved filter pre-applied for verification.
@@ -107,6 +108,7 @@ To use it: open the **Demo Data Modules** list page → **Import** → select th
 - Preview ID allocation before generating
 - Downloads the complete extension as a structured ZIP file
 - Bundles a **Copilot review prompt** (`.github/prompts/review-generated-code.prompt.md`) in the ZIP — open the extracted folder in VS Code and invoke the prompt via GitHub Copilot Chat to get guided, context-aware feedback on labels, naming, Contoso helper usage, sensitive data, and more
+- For modules with Transaction/Historical tables, bundles a second **Copilot data-generation prompt** (`.github/prompts/generate-transaction-data.prompt.md`) alongside `*.data.json` snapshots for each stub codeunit — attach the relevant BC symbols and invoke the prompt to turn the captured data into real create/post AL code
 
 ## Requirements
 
@@ -137,10 +139,10 @@ The downloaded ZIP contains a complete, compilable AL extension ready to be open
 
 ```
 src/
-├── Model/          # Persistent tables and enums (Module Definition, Table Selection, Field Configuration)
+├── Model/          # Persistent tables and enums (Module Definition, Table Selection, Field Configuration, Document Group)
 ├── UI/             # Pages (cards, lists, subpages, lookups)
-├── CodeGen/        # In-memory AST model (codeunit, procedure, variable, enum extension nodes)
-├── Generator/      # Code generators (Helper, Data, Module, Enum Extension, App Manifest)
+├── CodeGen/        # In-memory AST model (codeunit, procedure, variable, enum extension, data file nodes)
+├── Generator/      # Code generators (Helper, Data, Document Data, Module, Enum Extension, App Manifest)
 ├── Core/           # AL formatting, code templates, identifier utilities
 └── Export/         # Export orchestrator, ZIP assembly, JSON export/import
 ```
@@ -157,7 +159,7 @@ The generation pipeline:
 - **Guid default values** — the formatter currently outputs Guid defaults as single-quoted strings rather than proper AL Guid literals
 - **Reference Field validation** — the Reference Table ID / Reference Field ID fields on Field Configuration lack cross-field validation (the AL language doesn't support this kind of table relation natively)
 - **No integration events** — the codebase doesn't expose events for extensibility yet
-- **Transaction / Historical data levels** — these data levels are not yet supported by the generator. Tables assigned to Transaction Data or Historical Data will have skeleton `Create*Data` procedures generated, but the actual data generation logic is not implemented yet. This is a fundamentally different problem than Setup/Master data and will require a different approach.
+- **Transaction / Historical data levels** — the generator does not attempt to auto-generate real document-creation or posting AL code (this is not reliably automatable from a static data snapshot). Instead, tables at these levels get a stub `Create*Data` codeunit plus a `*.data.json` snapshot (nested Header+Line documents for tables configured as a Document Group, or a flat per-table array otherwise), and a bundled `.github/prompts/generate-transaction-data.prompt.md` Copilot prompt to turn that snapshot into real AL once you attach the relevant BC symbols.
 
 ## Roadmap
 
@@ -168,7 +170,7 @@ The generation pipeline:
 - [ ] **Multi-module batch export** — "Generate All" action on the Module Definition List that assembles all modules into a single ZIP
 - [ ] **Media / MediaSet field support** — Handle image and blob fields via Base64 export and a corresponding import helper pattern
 - [ ] **Test codeunit generation** — Auto-generate a basic test codeunit per module that installs the demo data and asserts key records exist
-- [ ] **Transaction Data / Historical Data level support** — Extend generation to cover the remaining Contoso data levels
+- [ ] **Auto-suggest Document Group Link fields** — Pre-populate Header/Line field-link mappings by matching PK field names/captions, letting the user only correct mismatches
 - [ ] **Record count / LOC warnings** — Flag tables with very high record counts that would produce unreasonably large codeunits, and suggest filtering or splitting
 - [ ] Integration events for generator extensibility
 - [ ] Reference Field validation UI (lookup for Field ID filtered by Reference Table ID)
