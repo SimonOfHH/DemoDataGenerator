@@ -28,7 +28,10 @@ table 70101 "Table Selection"
             var
                 AllObjWithCaption: Record AllObjWithCaption;
                 TableSelection: Record "Table Selection";
+                CurrLanguage: Integer;
             begin
+                CurrLanguage := GlobalLanguage();
+                GlobalLanguage(1033); // Ensure we are using English for table names
                 if AllObjWithCaption.Get(AllObjWithCaption."Object Type"::Table, "Table ID") then begin
                     Rec."Table Name" := AllObjWithCaption."Object Name";
                     Rec."AL Namespace" := AllObjWithCaption."AL Namespace";
@@ -38,6 +41,7 @@ table 70101 "Table Selection"
                         PopulateFields();
                 end;
                 PopulateNames();
+                GlobalLanguage(CurrLanguage); // Restore the original language  
             end;
 
             trigger OnLookup()
