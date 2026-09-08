@@ -4,6 +4,7 @@ using SimonOfHH.DemoData.Model;
 using SimonOfHH.DemoData.CodeGen;
 using SimonOfHH.DemoData.Generator;
 using SimonOfHH.DemoData.Core;
+using SimonOfHH.DemoData.Segments;
 
 /// <summary>
 /// Master entry point for code generation and download.
@@ -24,6 +25,9 @@ codeunit 70130 "Export Orchestrator"
         AppManifestGenerator: Codeunit "App Manifest Generator";
         ALFormatter: Codeunit "AL Formatter";
         ZipHelper: Codeunit "Zip Helper";
+        SegmentSyncManager: Codeunit "Segment Sync Manager";
+        SegmentFileAssembler: Codeunit "Segment File Assembler";
+        CodeSegmentStore: Codeunit "Code Segment Store";
 
     /// <summary>
     /// Runs all generators (manifest, enum extension, module, helper, data) in the correct order
@@ -44,16 +48,27 @@ codeunit 70130 "Export Orchestrator"
 
     /// <summary>
     /// Convenience overload that generates and exports (downloads) the module in one step.
-    /// Equivalent to calling Run(ModuleDef, true).
+    /// Equivalent to calling Run(ModuleDef, true, false).
     /// </summary>
     procedure Run(ModuleDef: Record "Module Definition")
     begin
-        this.Run(ModuleDef, true);
+        this.Run(ModuleDef, true, false);
     end;
+
     /// <summary>
-    /// Validates, generates, and downloads the complete AL extension.
+    /// Equivalent to calling Run(ModuleDef, Export, false).
     /// </summary>
     procedure Run(ModuleDef: Record "Module Definition"; Export: Boolean)
+    begin
+        this.Run(ModuleDef, Export, false);
+    end;
+
+    /// <summary>
+    /// Validates, generates, reconciles segments, and downloads the complete AL extension.
+    /// </summary>
+    /// <param name="ForceRegenerate">When true, every non-Locked segment is overwritten with the
+    /// freshly generated text even if the developer had edited it, discarding those edits.</param>
+    procedure Run(ModuleDef: Record "Module Definition"; Export: Boolean; ForceRegenerate: Boolean)
     var
         ModuleContainer: Codeunit "CodeGen Module Container";
     begin
@@ -64,16 +79,44 @@ codeunit 70130 "Export Orchestrator"
         // 3. Post-generation validation (e.g. ID range capacity)
         this.PostGenerateValidateModule(ModuleDef, ModuleContainer);
 
-        // 4. Assemble and download zip
-        if Export then begin
-            this.AssembleZip(ModuleDef, ModuleContainer);
+        // 4. Reconcile segments - runs regardless of Export, so callers can sync/force-regenerate
+        // without downloading anything (see "Sync Segments" / "Force Regenerate (No Download)").
+        if ForceRegenerate then
+            this.CodeSegmentStore.ForceRegenerateAll(ModuleDef.Code);
+        this.SegmentSyncManager.SyncFromContainer(ModuleDef, ModuleContainer);
 
-            // 5. Update status
-            ModuleDef.Status := "Module Status"::Generated;
-            ModuleDef.Modify(true);
+        if not Export then
+            exit;
 
-            Message(GenerationCompleteMsg, ModuleDef.Name);
-        end;
+        // 5. Assemble and download zip
+        if not this.ConfirmConflictsIfAny(ModuleDef) then
+            exit;
+
+        this.AssembleZip(ModuleDef, ModuleContainer);
+
+        // 6. Update status
+        ModuleDef.Status := "Module Status"::Generated;
+        ModuleDef.Modify(true);
+
+        Message(GenerationCompleteMsg, ModuleDef.Name);
+    end;
+
+    /// <summary>
+    /// Warns the developer before export if any segment is Modified or in Conflict, since export
+    /// ships the MANUAL version of a conflicted segment, not the freshly generated one. Returns
+    /// false if the developer cancels.
+    /// </summary>
+    local procedure ConfirmConflictsIfAny(ModuleDef: Record "Module Definition"): Boolean
+    var
+        ConflictCount: Integer;
+        ModifiedCount: Integer;
+        ConflictWarningQst: Label 'This module has %1 segment(s) in Conflict and %2 manually modified segment(s). Exporting will keep your manual edits and skip the freshly generated version for conflicted segments - review them first via the Code Segment list if unsure. Continue exporting?', Comment = '%1 = Conflict Count, %2 = Modified Count';
+    begin
+        ConflictCount := this.CodeSegmentStore.GetConflictCount(ModuleDef.Code);
+        ModifiedCount := this.CodeSegmentStore.GetModifiedCount(ModuleDef.Code);
+        if (ConflictCount = 0) and (ModifiedCount = 0) then
+            exit(true);
+        exit(Confirm(ConflictWarningQst, true, ConflictCount, ModifiedCount));
     end;
 
     local procedure PostGenerateValidateModule(ModuleDef: Record "Module Definition"; var ModuleContainer: Codeunit "CodeGen Module Container")
@@ -173,88 +216,81 @@ codeunit 70130 "Export Orchestrator"
         end;
     end;
 
+    /// <summary>
+    /// Assembles the zip from the "Code Segment" store (populated by "Segment Sync Manager",
+    /// which Run() calls before this) rather than directly from the AST's ToString() - this is
+    /// what preserves any manual edits the developer made to a previously exported file.
+    /// app.json and the JSON data snapshots are the only exceptions: they cannot carry AL
+    /// comment markers, so they are always taken directly from the freshly generated AST/JSON.
+    /// </summary>
     local procedure AssembleZip(ModuleDef: Record "Module Definition"; var ModuleContainer: Codeunit "CodeGen Module Container")
-    begin
-        this.AssembleZip(
-            ModuleDef,
-            ModuleContainer.GetHelperCodeunits(),
-            ModuleContainer.GetDataCodeunits(),
-            ModuleContainer.GetDataFiles(),
-            ModuleContainer.GetModuleCodeunit(),
-            ModuleContainer.GetEnumExtension(),
-            ModuleContainer.GetManifestCodeunit());
-    end;
-
-    local procedure AssembleZip(
-        ModuleDef: Record "Module Definition";
-        HelperCUs: List of [Codeunit "CodeGen Codeunit"];
-        DataCUs: List of [Codeunit "CodeGen Codeunit"];
-        DataFiles: List of [Codeunit "CodeGen Data File"];
-        ModuleCU: Codeunit "CodeGen Codeunit";
-        EnumExt: Codeunit "CodeGen Enum Extension";
-        AppManifest: Codeunit "CodeGen App Manifest")
     var
-        HelperCU: Codeunit "CodeGen Codeunit";
-        DataCU: Codeunit "CodeGen Codeunit";
         DataFile: Codeunit "CodeGen Data File";
-        BasePath: Text;
-        PublisherSafe, ModuleSafe : Text;
+        ArtifactKey: Text;
         DataLevelFolder: Text;
+        PublisherSafe, ModuleSafe : Text;
     begin
         PublisherSafe := this.ALFormatter.SanitizeIdentifier(ModuleDef.Publisher);
         ModuleSafe := this.ALFormatter.SanitizeIdentifier(ModuleDef.Name);
-        BasePath := '';
 
         this.ZipHelper.Initialize();
 
-        // app.json
-        this.ZipHelper.AddTextFile(BasePath + 'app.json', AppManifest.ToString());
+        // app.json — whole-file, always freshly generated (JSON cannot carry comment markers)
+        this.ZipHelper.AddTextFile('app.json', ModuleContainer.GetManifestCodeunit().ToString());
 
-        // Module codeunit
-        this.ZipHelper.AddTextFile(
-            BasePath + 'src/' + ModuleSafe + 'Module.Codeunit.al',
-            ModuleCU.ToString());
+        // Module codeunit (single file per module)
+        ArtifactKey := ModuleContainer.GetModuleCodeunit().Name();
+        if ArtifactKey <> '' then
+            this.AddAssembledFile(ModuleDef.Code, "Code Artifact Kind"::"Module Codeunit", ArtifactKey);
 
-        // Enum extension
-        this.ZipHelper.AddTextFile(
-            BasePath + 'src/' + ModuleSafe + 'ModuleEnum.EnumExt.al',
-            EnumExt.ToString());
+        // Enum extension (single file per module)
+        ArtifactKey := ModuleContainer.GetEnumExtension().Name();
+        if ArtifactKey <> '' then
+            this.AddAssembledFile(ModuleDef.Code, "Code Artifact Kind"::"Enum Extension", ArtifactKey);
 
         // Helper codeunits
-        foreach HelperCU in HelperCUs do
-            this.ZipHelper.AddTextFile(
-                BasePath + 'src/Helpers/' + this.ALFormatter.SanitizeIdentifier(HelperCU.Name()) + '.Codeunit.al',
-                HelperCU.ToString());
+        foreach ArtifactKey in this.SegmentFileAssembler.GetArtifactKeys(ModuleDef.Code, "Code Artifact Kind"::"Helper Codeunit") do
+            this.AddAssembledFile(ModuleDef.Code, "Code Artifact Kind"::"Helper Codeunit", ArtifactKey);
 
-        // Data codeunits — organized by data level folder
-        foreach DataCU in DataCUs do begin
-            // Look up the table selection to determine the data level folder
-            DataLevelFolder := this.GetDataLevelFolder(DataCU.DataLevel());
-            this.ZipHelper.AddTextFile(
-                BasePath + 'src/' + DataLevelFolder + this.ALFormatter.SanitizeIdentifier(DataCU.Name()) + '.Codeunit.al',
-                DataCU.ToString());
-        end;
+        // Data codeunits (includes "Document Data Generator"'s stub codeunits) - each one's own
+        // stored File Path already encodes its Data Level folder (set by "Segment Sync Manager")
+        foreach ArtifactKey in this.SegmentFileAssembler.GetArtifactKeys(ModuleDef.Code, "Code Artifact Kind"::"Data Codeunit") do
+            this.AddAssembledFile(ModuleDef.Code, "Code Artifact Kind"::"Data Codeunit", ArtifactKey);
 
-        // Transaction/Historical JSON data snapshots — next to their paired stub data codeunit
-        foreach DataFile in DataFiles do begin
+        // Transaction/Historical JSON data snapshots — whole-file, always freshly generated
+        foreach DataFile in ModuleContainer.GetDataFiles() do begin
             DataLevelFolder := this.GetDataLevelFolder(DataFile.DataLevel());
-            this.ZipHelper.AddTextFile(
-                BasePath + 'src/' + DataLevelFolder + DataFile.FileName(),
-                DataFile.Content());
+            this.ZipHelper.AddTextFile('src/' + DataLevelFolder + DataFile.FileName(), DataFile.Content());
         end;
 
         // Review & polish prompt for Copilot
-        this.ZipHelper.AddTextFile(BasePath + '.github/prompts/review-generated-code.prompt.md', this.GetReviewPromptContent());
+        this.ZipHelper.AddTextFile('.github/prompts/review-generated-code.prompt.md', this.GetReviewPromptContent());
 
         // Transaction/Historical data generation prompt for Copilot (only relevant when such data was captured)
-        if DataFiles.Count() > 0 then
-            this.ZipHelper.AddTextFile(BasePath + '.github/prompts/generate-transaction-data.prompt.md', this.GetTransactionDataPromptContent());
+        if ModuleContainer.GetDataFiles().Count() > 0 then
+            this.ZipHelper.AddTextFile('.github/prompts/generate-transaction-data.prompt.md', this.GetTransactionDataPromptContent());
 
         // Download
         this.ZipHelper.Download(PublisherSafe + '_' + ModuleSafe + '_' + ModuleDef."App Version" + '.zip');
     end;
 
-    local procedure GetDataLevelFolder(DataLevel: Enum SimonOfHH.DemoData.Model."Data Level"): Text
+    local procedure AddAssembledFile(ModuleCode: Code[20]; ArtifactKind: Enum "Code Artifact Kind"; ArtifactKey: Text)
+    var
+        ArtifactKeyTrunc: Text[100];
+    begin
+        ArtifactKeyTrunc := CopyStr(ArtifactKey, 1, MaxStrLen(ArtifactKeyTrunc));
+        this.ZipHelper.AddTextFile(
+            this.SegmentFileAssembler.GetFilePath(ModuleCode, ArtifactKind, ArtifactKeyTrunc),
+            this.SegmentFileAssembler.AssembleFile(ModuleCode, ArtifactKind, ArtifactKeyTrunc));
+    end;
+
+    /// <summary>
+    /// Maps a Data Level to the relative output folder used within the exported zip. Made
+    /// internal (not local) so "Segment Sync Manager" and "Segment File Assembler" can compute
+    /// the exact same "Code Segment"."File Path" without duplicating (and risking drift from)
+    /// this mapping.
+    /// </summary>
+    internal procedure GetDataLevelFolder(DataLevel: Enum SimonOfHH.DemoData.Model."Data Level"): Text
     begin
         case DataLevel of
             "Data Level"::"Setup Data":
@@ -310,6 +346,29 @@ codeunit 70130 "Export Orchestrator"
         Content.AppendLine('| `src/2.Master Data/` | Data codeunits for Master Data level |');
         Content.AppendLine('| `src/3.Transactions/` | Stub codeunits + `*.data.json` snapshots - see item 6 below |');
         Content.AppendLine('| `src/4.Historical Data/` | Stub codeunits + `*.data.json` snapshots - see item 6 below |');
+        Content.AppendLine('');
+        Content.AppendLine('---');
+        Content.AppendLine('');
+        // Marker comments - IMPORTANT: must survive review edits
+        Content.AppendLine('## IMPORTANT: `// >>> DDG ...` / `// <<< DDG ...` Marker Comments');
+        Content.AppendLine('');
+        Content.AppendLine('Every `.al` file in this archive is wrapped, section by section, in paired comment lines that look like this:');
+        Content.AppendLine('');
+        Content.AppendLine('```al');
+        Content.AppendLine('    // >>> DDG HELPER.BANK.INSERT.36');
+        Content.AppendLine('    procedure InsertBankAccount(...)');
+        Content.AppendLine('    ...');
+        Content.AppendLine('    // <<< DDG HELPER.BANK.INSERT.36');
+        Content.AppendLine('```');
+        Content.AppendLine('');
+        Content.AppendLine('These are NOT leftover debug output and should NOT be deleted or treated as noise to clean up. The Demo Data Generator tool uses them to track this code as a "segment" so that regenerating this module later (e.g. after adding a table, or refreshing the underlying data) can detect and preserve the edits made during this review instead of silently overwriting them.');
+        Content.AppendLine('');
+        Content.AppendLine('**When editing this code:**');
+        Content.AppendLine('');
+        Content.AppendLine('- Freely edit, rename, or rewrite the code BETWEEN a `// >>> DDG ...` line and its matching `// <<< DDG ...` line - that is exactly what these markers are for.');
+        Content.AppendLine('- Leave the marker lines themselves in place, with their Segment ID text unchanged, and do not move a marker pair''s content across a file/procedure boundary.');
+        Content.AppendLine('- It is fine to add brand-new code (e.g. a helper procedure) that is NOT between any marker pair - it will be picked up as a "manually added" block the next time this source is re-imported into the tool.');
+        Content.AppendLine('- If a marker line is deleted or its Segment ID text is changed, that specific piece of code will no longer be recognized on re-import; it is not harmful, but that one edit will not be tracked for the incremental-regeneration workflow the next time this module changes.');
         Content.AppendLine('');
         Content.AppendLine('---');
         Content.AppendLine('');

@@ -175,6 +175,8 @@ codeunit 70120 "Helper Generator"
         ReferenceValues: List of [Codeunit "CodeGen Reference Value"];
     begin
         RecRef.Open(TableSelection."Table ID");
+        if TableSelection."Table View" <> '' then
+            RecRef.SetView(TableSelection."Table View");
         if not RecRef.FindSet() then
             exit;
         repeat

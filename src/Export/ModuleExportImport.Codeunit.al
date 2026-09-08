@@ -85,6 +85,9 @@ codeunit 70135 "Module Export Import"
         TablesArray := BuildTableSelectionsJson(ModuleDef.Code);
         Json.Add('tableSelections', TablesArray);
 
+        Json.Add('documentGroups', BuildDocumentGroupsJson(ModuleDef.Code));
+        Json.Add('documentGroupLinks', BuildDocumentGroupLinksJson(ModuleDef.Code));
+
         DepsArray := BuildDependenciesJson(ModuleDef.Code);
         Json.Add('dependencies', DepsArray);
 
@@ -109,9 +112,60 @@ codeunit 70135 "Module Export Import"
                 TableJson.Add('alNamespace', TableSelection."AL Namespace");
                 TableJson.Add('helperCodeunitName', TableSelection."Helper Codeunit Name");
                 TableJson.Add('dataCodeunitName', TableSelection."Data Codeunit Name");
+                TableJson.Add('tableView', TableSelection."Table View");
+                TableJson.Add('documentGroupCode', TableSelection."Document Group Code");
+                TableJson.Add('groupRole', TableSelection."Group Role".AsInteger());
                 TableJson.Add('fields', BuildFieldConfigsJson(ModuleCode, TableSelection."Table ID"));
                 Arr.Add(TableJson);
             until TableSelection.Next() = 0;
+        exit(Arr);
+    end;
+
+    /// <summary>
+    /// Builds the JSON array for all Document Groups belonging to this module (H2 fix - previously
+    /// omitted entirely, so exported modules with Document Groups could never be restored).
+    /// </summary>
+    local procedure BuildDocumentGroupsJson(ModuleCode: Code[20]): JsonArray
+    var
+        DocumentGroup: Record "Document Group";
+        Arr: JsonArray;
+        GroupJson: JsonObject;
+    begin
+        DocumentGroup.SetRange("Module Code", ModuleCode);
+        if DocumentGroup.FindSet() then
+            repeat
+                Clear(GroupJson);
+                GroupJson.Add('code', DocumentGroup.Code);
+                GroupJson.Add('name', DocumentGroup."Name");
+                GroupJson.Add('dataLevel', DocumentGroup."Data Level".AsInteger());
+                GroupJson.Add('dataCodeunitName', DocumentGroup."Data Codeunit Name");
+                Arr.Add(GroupJson);
+            until DocumentGroup.Next() = 0;
+        exit(Arr);
+    end;
+
+    /// <summary>
+    /// Builds the JSON array for all Document Group Links belonging to this module (H2 fix - see
+    /// <see cref="BuildDocumentGroupsJson"/>).
+    /// </summary>
+    local procedure BuildDocumentGroupLinksJson(ModuleCode: Code[20]): JsonArray
+    var
+        DocumentGroupLink: Record "Document Group Link";
+        Arr: JsonArray;
+        LinkJson: JsonObject;
+    begin
+        DocumentGroupLink.SetRange("Module Code", ModuleCode);
+        if DocumentGroupLink.FindSet() then
+            repeat
+                Clear(LinkJson);
+                LinkJson.Add('tableId', DocumentGroupLink."Table ID");
+                LinkJson.Add('lineNo', DocumentGroupLink."Line No.");
+                LinkJson.Add('childFieldNo', DocumentGroupLink."Child Field No.");
+                LinkJson.Add('childFieldName', DocumentGroupLink."Child Field Name");
+                LinkJson.Add('headerFieldNo', DocumentGroupLink."Header Field No.");
+                LinkJson.Add('headerFieldName', DocumentGroupLink."Header Field Name");
+                Arr.Add(LinkJson);
+            until DocumentGroupLink.Next() = 0;
         exit(Arr);
     end;
 
@@ -208,6 +262,7 @@ codeunit 70135 "Module Export Import"
             ModuleDef.Modify(false);
 
         ReadTableSelectionsJson(Json, ModuleCode);
+        ReadDocumentGroupLinksJson(Json, ModuleCode);
         ReadDependenciesJson(Json, ModuleCode);
 
         // Now do a "clean up" pass to e.g. remove fields that don't exist in this environment
@@ -227,9 +282,14 @@ codeunit 70135 "Module Export Import"
             exit;
         Arr := Token.AsArray();
 
-        // Delete existing table selections (cascades to field configs via OnDelete)
+        // Delete existing table selections (cascades to field configs AND document group links
+        // via OnDelete). Document Groups themselves are handled separately by
+        // ReadDocumentGroupsJson, since "Table Selection".OnDelete does not touch that table.
         TableSelection.SetRange("Module Code", ModuleCode);
         TableSelection.DeleteAll(true);
+
+        // Document Groups must exist before Table Selections reference them via "Document Group Code"
+        ReadDocumentGroupsJson(Json, ModuleCode);
 
         for i := 0 to Arr.Count - 1 do begin
             Arr.Get(i, TableToken);
@@ -245,9 +305,85 @@ codeunit 70135 "Module Export Import"
             TableSelection."AL Namespace" := CopyStr(GetJsonText(TableJson, 'alNamespace'), 1, MaxStrLen(TableSelection."AL Namespace"));
             TableSelection."Helper Codeunit Name" := CopyStr(GetJsonText(TableJson, 'helperCodeunitName'), 1, MaxStrLen(TableSelection."Helper Codeunit Name"));
             TableSelection."Data Codeunit Name" := CopyStr(GetJsonText(TableJson, 'dataCodeunitName'), 1, MaxStrLen(TableSelection."Data Codeunit Name"));
+            TableSelection."Table View" := CopyStr(GetJsonText(TableJson, 'tableView'), 1, MaxStrLen(TableSelection."Table View"));
+            TableSelection."Document Group Code" := CopyStr(GetJsonText(TableJson, 'documentGroupCode'), 1, MaxStrLen(TableSelection."Document Group Code"));
+            TableSelection."Group Role" := "Document Group Role".FromInteger(GetJsonInt(TableJson, 'groupRole'));
             TableSelection.Insert(false);
 
             ReadFieldConfigsJson(TableJson, ModuleCode, TableSelection."Table ID");
+        end;
+    end;
+
+    /// <summary>
+    /// Reads the "documentGroups" array (H2 fix). Deletes any existing Document Groups for this
+    /// module first so a re-import never leaves stale groups behind (Document Group is not
+    /// cascaded from "Table Selection".OnDelete, unlike Field Configuration/Document Group Link).
+    /// </summary>
+    local procedure ReadDocumentGroupsJson(Json: JsonObject; ModuleCode: Code[20])
+    var
+        DocumentGroup: Record "Document Group";
+        Token: JsonToken;
+        Arr: JsonArray;
+        GroupToken: JsonToken;
+        GroupJson: JsonObject;
+        i: Integer;
+    begin
+        DocumentGroup.SetRange("Module Code", ModuleCode);
+        DocumentGroup.DeleteAll(false);
+
+        if not Json.Get('documentGroups', Token) then
+            exit;
+        Arr := Token.AsArray();
+
+        for i := 0 to Arr.Count - 1 do begin
+            Arr.Get(i, GroupToken);
+            GroupJson := GroupToken.AsObject();
+
+            DocumentGroup.Init();
+            DocumentGroup."Module Code" := ModuleCode;
+            DocumentGroup.Code := CopyStr(GetJsonText(GroupJson, 'code'), 1, MaxStrLen(DocumentGroup.Code));
+            DocumentGroup."Name" := CopyStr(GetJsonText(GroupJson, 'name'), 1, MaxStrLen(DocumentGroup."Name"));
+            DocumentGroup."Data Level" := "Data Level".FromInteger(GetJsonInt(GroupJson, 'dataLevel'));
+            DocumentGroup."Data Codeunit Name" := CopyStr(GetJsonText(GroupJson, 'dataCodeunitName'), 1, MaxStrLen(DocumentGroup."Data Codeunit Name"));
+            DocumentGroup.Insert(false);
+        end;
+    end;
+
+    /// <summary>
+    /// Reads the "documentGroupLinks" array (H2 fix). Must run AFTER Table Selections have been
+    /// re-created, since each link belongs to a Line-role Table Selection. Deletes any existing
+    /// links for this module first (they are self-contained; not relied on to already be gone
+    /// from the Table Selection cascade).
+    /// </summary>
+    local procedure ReadDocumentGroupLinksJson(Json: JsonObject; ModuleCode: Code[20])
+    var
+        DocumentGroupLink: Record "Document Group Link";
+        Token: JsonToken;
+        Arr: JsonArray;
+        LinkToken: JsonToken;
+        LinkJson: JsonObject;
+        i: Integer;
+    begin
+        DocumentGroupLink.SetRange("Module Code", ModuleCode);
+        DocumentGroupLink.DeleteAll(false);
+
+        if not Json.Get('documentGroupLinks', Token) then
+            exit;
+        Arr := Token.AsArray();
+
+        for i := 0 to Arr.Count - 1 do begin
+            Arr.Get(i, LinkToken);
+            LinkJson := LinkToken.AsObject();
+
+            DocumentGroupLink.Init();
+            DocumentGroupLink."Module Code" := ModuleCode;
+            DocumentGroupLink."Table ID" := GetJsonInt(LinkJson, 'tableId');
+            DocumentGroupLink."Line No." := GetJsonInt(LinkJson, 'lineNo');
+            DocumentGroupLink."Child Field No." := GetJsonInt(LinkJson, 'childFieldNo');
+            DocumentGroupLink."Child Field Name" := CopyStr(GetJsonText(LinkJson, 'childFieldName'), 1, MaxStrLen(DocumentGroupLink."Child Field Name"));
+            DocumentGroupLink."Header Field No." := GetJsonInt(LinkJson, 'headerFieldNo');
+            DocumentGroupLink."Header Field Name" := CopyStr(GetJsonText(LinkJson, 'headerFieldName'), 1, MaxStrLen(DocumentGroupLink."Header Field Name"));
+            DocumentGroupLink.Insert(false);
         end;
     end;
 

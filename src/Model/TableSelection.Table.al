@@ -2,6 +2,7 @@ namespace SimonOfHH.DemoData.Model;
 
 using System.Reflection;
 using SimonOfHH.DemoData.UI;
+using SimonOfHH.DemoData.Segments;
 
 /// <summary>
 /// Child of Module Definition. Each record represents a BC table selected for code generation.
@@ -187,6 +188,7 @@ table 70101 "Table Selection"
     var
         FieldConfiguration: Record "Field Configuration";
         DocumentGroupLink: Record "Document Group Link";
+        CodeSegmentStore: Codeunit "Code Segment Store";
     begin
         FieldConfiguration.SetRange("Module Code", "Module Code");
         FieldConfiguration.SetRange("Table ID", "Table ID");
@@ -195,6 +197,11 @@ table 70101 "Table Selection"
         DocumentGroupLink.SetRange("Module Code", "Module Code");
         DocumentGroupLink.SetRange("Table ID", "Table ID");
         DocumentGroupLink.DeleteAll(true);
+
+        // Code Segments are preserved (not deleted) so a developer's manual edits survive if
+        // this table is ever re-added to the module later - they are just marked Orphaned so
+        // they are excluded from the next export.
+        CodeSegmentStore.MarkOrphanedForTable("Module Code", "Table ID");
     end;
 
     var

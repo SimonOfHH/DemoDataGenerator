@@ -66,6 +66,51 @@ codeunit 70113 "CodeGen Enum Extension"
         this.EnumValueName := NewName;
         this.EnumValueImplCodeunitName := NewImplementationCodeunitName;
     end;
+
+    // ═══════════════════════ Segment-aware accessors (Code Segment Store) ═══════════════════════
+    // See "CodeGen Codeunit" for why these are additive and do not change ToString()'s output.
+
+    /// <summary>
+    /// Returns the file header text: namespace, usings, object declaration, opening brace, and
+    /// properties. Corresponds to the "File Header" Code Segment.
+    /// </summary>
+    procedure GetHeaderText(): Text
+    var
+        Writer: Codeunit "CodeGen Writer";
+    begin
+        Writer.WriteBaseObject(this.BaseObject);
+        exit(Writer.ToText());
+    end;
+
+    /// <summary>
+    /// Returns the `value(...) { ... }` block text. Corresponds to the "Property" Code Segment
+    /// (there is exactly one per enum extension file).
+    /// </summary>
+    procedure GetBodyText(): Text
+    var
+        Writer: Codeunit "CodeGen Writer";
+    begin
+        Writer.IncreaseIndent();
+#pragma warning disable AA0217
+        Writer.AppendLine(StrSubstNo('value(%1; "%2")', this.EnumValueOrdinal, this.EnumValueName));
+        Writer.AppendLine('{');
+        Writer.IncreaseIndent();
+        Writer.AppendLine(StrSubstNo('Caption = ''%1'';', this.EnumValueName));
+        Writer.AppendLine(StrSubstNo('Implementation = "Contoso Demo Data Module" = "%1";', this.EnumValueImplCodeunitName));
+        Writer.DecreaseIndent();
+        Writer.AppendLine('}');
+#pragma warning restore AA0217
+        Writer.DecreaseIndent();
+        exit(Writer.ToText());
+    end;
+
+    /// <summary>
+    /// Returns the closing brace text. Corresponds to the "File Footer" Code Segment.
+    /// </summary>
+    procedure GetFooterText(): Text
+    begin
+        exit('}');
+    end;
     /// <summary>
     /// Serializes to a complete AL enumextension source file.
     /// </summary>

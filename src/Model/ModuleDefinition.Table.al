@@ -120,12 +120,27 @@ table 70100 "Module Definition"
     var
         TableSelection: Record "Table Selection";
         ModuleDependency: Record "Module Dependency";
+        DocumentGroup: Record "Document Group";
+        CodeSegment: Record "Code Segment";
     begin
         TableSelection.SetRange("Module Code", Code);
         TableSelection.DeleteAll(true);
 
         ModuleDependency.SetRange("Module Code", Code);
         ModuleDependency.DeleteAll(true);
+
+        // Table Selection is deleted above, so Document Group's own OnDelete (which un-links
+        // member Table Selections) has nothing left to find - this purely removes the now-orphaned
+        // group records themselves, preventing them from resurrecting if a module with the same
+        // Code is re-created later.
+        DocumentGroup.SetRange("Module Code", Code);
+        DocumentGroup.DeleteAll(true);
+
+        // Code Segments are module-scoped and have no independent meaning once the module is
+        // gone - unlike Table Selection.OnDelete, there is no "re-added later" scenario to
+        // preserve them for, so they are deleted outright rather than orphaned.
+        CodeSegment.SetRange("Module Code", Code);
+        CodeSegment.DeleteAll(false);
     end;
 
     var

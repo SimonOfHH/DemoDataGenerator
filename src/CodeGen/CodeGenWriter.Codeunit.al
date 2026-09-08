@@ -93,9 +93,21 @@ codeunit 70127 "CodeGen Writer"
         this.AppendLine('');
     end;
 
+    /// <summary>
+    /// Appends a line, indented to the current level - EXCEPT when Line is empty, in which case
+    /// a truly empty line is written instead. Without this guard, "blank separator" lines (e.g.
+    /// the trailing AppendLine('') in WriteProperties/WriteGlobalVariables) would become
+    /// whitespace-only lines (N spaces) whenever IndentLevel > 0 - which are NOT the same as a
+    /// real blank line: the Code Segment Store's blob read-back treats a whitespace-only line as
+    /// meaningful content (not absorbed the same way an actually-empty line is), so re-importing
+    /// a freshly-exported, unedited file would spuriously show these segments as Modified.
+    /// </summary>
     procedure AppendLine(Line: Text)
     begin
-        this.Output.AppendLine(this.GetIndent(this.IndentLevel) + Line);
+        if Line = '' then
+            this.Output.AppendLine('')
+        else
+            this.Output.AppendLine(this.GetIndent(this.IndentLevel) + Line);
     end;
 
     procedure ToText(): Text
